@@ -1,5 +1,5 @@
 // Edge Function: crea un usuario vendedor (auth + perfil).
-// Solo puede ser invocada por un usuario ya autenticado con rol admin.
+// Solo puede ser invocada por un usuario ya autenticado con rol admin o super_admin.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -7,6 +7,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+
+const PAISES_VALIDOS = ["GT", "SV"];
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -23,7 +25,7 @@ Deno.serve(async (req) => {
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // Cliente "como el usuario que llama", para verificar que es admin.
+    // Cliente "como el usuario que llama", para verificar su rol y pais.
     const callerClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -39,23 +41,50 @@ Deno.serve(async (req) => {
 
     const { data: callerProfile, error: profileError } = await callerClient
       .from("profiles")
-      .select("role")
+      .select("role, country")
       .eq("id", user.id)
       .single();
 
-    if (profileError || callerProfile?.role !== "admin") {
+    if (
+      profileError ||
+      !callerProfile ||
+      (callerProfile.role !== "admin" && callerProfile.role !== "super_admin")
+    ) {
       return jsonResponse({ error: "Solo un admin puede crear vendedores" }, 403);
     }
 
     const body = await req.json();
-    const { email, password, full_name, phone } = body ?? {};
+    const { email, password, full_name, phone, route_id } = body ?? {};
+    let { country } = body ?? {};
 
     if (!email || !password || !full_name) {
       return jsonResponse({ error: "email, password y full_name son requeridos" }, 400);
     }
+    if (!route_id) {
+      return jsonResponse({ error: "route_id (región) es requerido" }, 400);
+    }
+
+    if (callerProfile.role === "admin") {
+      // Un admin de pais solo puede crear vendedores de su propio pais,
+      // sin importar que pais haya mandado el formulario.
+      country = callerProfile.country;
+    } else if (!PAISES_VALIDOS.includes(country)) {
+      return jsonResponse({ error: "country (GT o SV) es requerido" }, 400);
+    }
 
     // Cliente con service role: unica forma autorizada de crear usuarios.
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
+    // La región debe existir y pertenecer al mismo pais del vendedor a crear.
+    const { data: routeRow, error: routeError } = await adminClient
+      .from("routes")
+      .select("country")
+      .eq("id", route_id)
+      .single();
+
+    if (routeError || !routeRow || routeRow.country !== country) {
+      return jsonResponse({ error: "La región seleccionada no es válida para ese país" }, 400);
+    }
 
     const { data: created, error: createError } = await adminClient.auth.admin.createUser({
       email,
@@ -72,6 +101,8 @@ Deno.serve(async (req) => {
       full_name,
       phone: phone ?? null,
       role: "salesman",
+      country,
+      route_id,
     });
 
     if (insertError) {

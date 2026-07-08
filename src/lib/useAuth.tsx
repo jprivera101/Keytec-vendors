@@ -7,6 +7,7 @@ interface AuthContextValue {
   session: Session | null
   profile: Profile | null
   cargando: boolean
+  authError: string | null
   iniciarSesion: (email: string, password: string) => Promise<{ error: string | null }>
   cerrarSesion: () => Promise<void>
 }
@@ -17,6 +18,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [cargando, setCargando] = useState(true)
+  const [authError, setAuthError] = useState<string | null>(null)
 
   useEffect(() => {
     let activo = true
@@ -45,12 +47,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   async function cargarPerfil(userId: string) {
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single()
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single()
+    if (error || !data) {
+      // Sesión válida pero sin perfil: no lo dejamos atascado sin explicación.
+      setAuthError(
+        'Tu cuenta no tiene un perfil configurado. Pide al administrador que revise tu usuario.',
+      )
+      setProfile(null)
+      await supabase.auth.signOut()
+      setCargando(false)
+      return
+    }
     setProfile(data)
     setCargando(false)
   }
 
   async function iniciarSesion(email: string, password: string) {
+    setAuthError(null)
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     return { error: error ? traducirError(error.message) : null }
   }
@@ -60,7 +73,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ session, profile, cargando, iniciarSesion, cerrarSesion }}>
+    <AuthContext.Provider
+      value={{ session, profile, cargando, authError, iniciarSesion, cerrarSesion }}
+    >
       {children}
     </AuthContext.Provider>
   )

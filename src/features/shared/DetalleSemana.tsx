@@ -1,10 +1,25 @@
 import { useQuery } from '@tanstack/react-query'
 import { obtenerSemanaPorId, obtenerVisitasConVentas } from '../../lib/api'
+import { formatMonto } from '../../lib/currency'
 import { Spinner } from '../../components/Spinner'
+import { FotoPrivada } from '../../components/FotoPrivada'
 import { MapaRuta } from './MapaRuta'
 import { VisitaCard } from './VisitaCard'
+import type { CountryCode, TiendaConLugar } from '../../lib/types'
 
-export function DetalleSemana({ weekId }: { weekId: string }) {
+export function DetalleSemana({
+  weekId,
+  tiendasRegion,
+  country,
+  puedeAgregarVenta = false,
+  onAgregarVenta = () => {},
+}: {
+  weekId: string
+  tiendasRegion?: TiendaConLugar[]
+  country?: CountryCode | null
+  puedeAgregarVenta?: boolean
+  onAgregarVenta?: (visitId: string) => void
+}) {
   const semanaQuery = useQuery({
     queryKey: ['semana', weekId],
     queryFn: () => obtenerSemanaPorId(weekId),
@@ -36,16 +51,27 @@ export function DetalleSemana({ weekId }: { weekId: string }) {
         />
         <StatCard etiqueta="Km recorridos" valor={kmRecorridos != null ? `${kmRecorridos} km` : '—'} />
         <StatCard etiqueta="Visitas" valor={String(visitas.length)} />
-        <StatCard etiqueta="Total vendido" valor={`Q${totalVentas.toFixed(2)}`} />
+        <StatCard etiqueta="Total vendido" valor={formatMonto(totalVentas, country)} />
       </div>
 
-      <MapaRuta visitas={visitas} />
+      <div className="grid grid-cols-2 gap-3">
+        <FotoKilometraje etiqueta="Kilometraje inicial" km={semana.start_mileage_km} path={semana.start_mileage_photo_path} />
+        <FotoKilometraje etiqueta="Kilometraje final" km={semana.end_mileage_km} path={semana.end_mileage_photo_path} />
+      </div>
+
+      <MapaRuta visitas={visitas} tiendasRegion={tiendasRegion} country={country} />
 
       <div>
         <h3 className="mb-2 text-sm font-semibold text-slate-500">Visitas</h3>
         <div className="space-y-3">
           {visitas.map((visita) => (
-            <VisitaCard key={visita.id} visita={visita} puedeAgregarVenta={false} onAgregarVenta={() => {}} />
+            <VisitaCard
+              key={visita.id}
+              visita={visita}
+              puedeAgregarVenta={puedeAgregarVenta}
+              onAgregarVenta={onAgregarVenta}
+              country={country}
+            />
           ))}
           {visitas.length === 0 && <p className="text-sm text-slate-400">Sin visitas registradas.</p>}
         </div>
@@ -56,9 +82,39 @@ export function DetalleSemana({ weekId }: { weekId: string }) {
 
 function StatCard({ etiqueta, valor }: { etiqueta: string; valor: string }) {
   return (
-    <div className="rounded-xl bg-white p-3 text-center shadow-sm">
+    <div className="card p-3 text-center">
       <p className="text-xs text-slate-400">{etiqueta}</p>
       <p className="mt-1 text-sm font-bold text-slate-900">{valor}</p>
+    </div>
+  )
+}
+
+function FotoKilometraje({
+  etiqueta,
+  km,
+  path,
+}: {
+  etiqueta: string
+  km: number | null
+  path: string | null
+}) {
+  return (
+    <div className="card p-3">
+      <p className="mb-2 text-xs text-slate-400">
+        {etiqueta} {km != null && <span className="font-semibold text-slate-700">· {km} km</span>}
+      </p>
+      {path ? (
+        <FotoPrivada
+          bucket="mileage-photos"
+          path={path}
+          alt={etiqueta}
+          className="h-32 w-full rounded-lg object-cover"
+        />
+      ) : (
+        <div className="flex h-32 items-center justify-center rounded-lg bg-slate-100 text-xs text-slate-400">
+          Sin foto
+        </div>
+      )}
     </div>
   )
 }

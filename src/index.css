@@ -1,11 +1,26 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --color-brand-50: #eff6ff;
-  --color-brand-100: #dbeafe;
-  --color-brand-600: #2563eb;
-  --color-brand-700: #1d4ed8;
-  --color-brand-800: #1e40af;
+  --font-sans: 'Poppins', system-ui, 'Segoe UI', sans-serif;
+
+  /* Paleta KeyTec: azul es el color de accion (botones/enlaces), morado es la
+     identidad de marca (logo, barra lateral de admin), amarillo es acento puntual. */
+  --color-brand-50: #eaf4fb;
+  --color-brand-100: #cfe6f6;
+  --color-brand-500: #0092d2;
+  --color-brand-600: #0092d2;
+  --color-brand-700: #2d77bd;
+  --color-brand-800: #23608f;
+
+  --color-ink-50: #eeecf9;
+  --color-ink-100: #d9d5f0;
+  --color-ink-600: #453a9e;
+  --color-ink-700: #382e88;
+  --color-ink-800: #2a2266;
+
+  --color-highlight-400: #ffce07;
+  --color-highlight-500: #e8ba00;
 }
 
 html,
@@ -17,4 +32,51 @@ body,
 body {
   margin: 0;
   -webkit-tap-highlight-color: transparent;
+}
+
+@layer components {
+  /* Tarjeta base: un borde muy sutil ademas de la sombra para que se distinga del fondo
+     gris claro, en vez de quedar "flotando" sin límite visible. */
+  .card {
+    @apply rounded-2xl border border-slate-100 bg-white shadow-sm;
+  }
+
+  .btn-primary,
+  .btn-secondary,
+  .btn-outline,
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100;
+  }
+  .btn-primary {
+    @apply bg-brand-700 text-white shadow-sm shadow-brand-700/25 hover:bg-brand-800 hover:shadow-md;
+  }
+  .btn-secondary {
+    @apply border border-slate-200 bg-white text-slate-600 shadow-sm hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900;
+  }
+  .btn-outline {
+    @apply border border-brand-700 text-brand-700 hover:bg-brand-50;
+  }
+  .btn-ghost {
+    @apply text-brand-700 hover:bg-brand-50;
+  }
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+
+  .input-field {
+    @apply w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm transition-colors focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/15;
+  }
+}
+
+/* Pin de tienda en el mapa de rutas: crece al pasar el mouse, creciendo hacia arriba desde
+   la punta (que es la que marca la coordenada real) para no perder precisión visual. */
+.tienda-pin-wrap {
+  display: block;
+  cursor: pointer;
+  transform-origin: bottom center;
+  transition: transform 0.15s ease-out;
+}
+
+.tienda-pin-wrap:hover {
+  transform: scale(1.45);
 }

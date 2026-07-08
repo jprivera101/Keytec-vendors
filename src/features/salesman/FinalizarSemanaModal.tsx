@@ -1,17 +1,30 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Modal } from '../../components/Modal'
+import { CamaraCaptura } from '../../components/CamaraCaptura'
+import { comprimirImagen } from '../../lib/imageCompress'
+import { subirFoto } from '../../lib/storage'
 
 interface Props {
   abierto: boolean
   kmInicial: number
+  userId: string
   onCerrar: () => void
-  onConfirmar: (kmFinal: number) => Promise<void>
+  onConfirmar: (kmFinal: number, fotoPath: string) => Promise<void>
 }
 
-export function FinalizarSemanaModal({ abierto, kmInicial, onCerrar, onConfirmar }: Props) {
+export function FinalizarSemanaModal({ abierto, kmInicial, userId, onCerrar, onConfirmar }: Props) {
   const [km, setKm] = useState('')
+  const [foto, setFoto] = useState<Blob | null>(null)
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (abierto) {
+      setKm('')
+      setFoto(null)
+      setError(null)
+    }
+  }, [abierto])
 
   async function manejarConfirmar() {
     const valor = Number(km)
@@ -23,11 +36,16 @@ export function FinalizarSemanaModal({ abierto, kmInicial, onCerrar, onConfirmar
       setError(`El kilometraje final no puede ser menor al inicial (${kmInicial} km)`)
       return
     }
+    if (!foto) {
+      setError('Toma una foto del kilometraje')
+      return
+    }
     setError(null)
     setEnviando(true)
     try {
-      await onConfirmar(valor)
-      setKm('')
+      const comprimida = await comprimirImagen(foto)
+      const path = await subirFoto('mileage-photos', userId, comprimida)
+      await onConfirmar(valor, path)
     } catch (e) {
       setError((e as Error).message)
     } finally {
@@ -37,27 +55,37 @@ export function FinalizarSemanaModal({ abierto, kmInicial, onCerrar, onConfirmar
 
   return (
     <Modal titulo="Finalizar semana" abierto={abierto} onCerrar={onCerrar}>
-      <p className="mb-4 text-sm text-slate-500">
-        Ingresa el kilometraje del vehículo al terminar la ruta. Kilometraje inicial: {kmInicial} km.
-      </p>
-      <label className="mb-1 block text-sm font-medium text-slate-700">Kilometraje final (km)</label>
-      <input
-        type="number"
-        inputMode="decimal"
-        value={km}
-        onChange={(e) => setKm(e.target.value)}
-        placeholder="Ej. 45890"
-        className="mb-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-base focus:border-brand-600 focus:outline-none"
-      />
-      {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
-      <button
-        type="button"
-        onClick={manejarConfirmar}
-        disabled={enviando}
-        className="mt-2 w-full rounded-lg bg-brand-700 py-2.5 font-semibold text-white disabled:opacity-60"
-      >
-        {enviando ? 'Guardando...' : 'Finalizar semana'}
-      </button>
+      <div className="space-y-4">
+        <p className="text-sm text-slate-500">
+          Toma una foto del odómetro e ingresa el kilometraje al terminar la ruta. Kilometraje
+          inicial: {kmInicial} km.
+        </p>
+
+        <CamaraCaptura etiqueta="Foto del kilometraje final" onCapturada={setFoto} />
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Kilometraje final (km)</label>
+          <input
+            type="number"
+            inputMode="decimal"
+            value={km}
+            onChange={(e) => setKm(e.target.value)}
+            placeholder="Ej. 45890"
+            className="input-field text-base"
+          />
+        </div>
+
+        {error && <p className="text-sm text-red-600">{error}</p>}
+
+        <button
+          type="button"
+          onClick={manejarConfirmar}
+          disabled={enviando}
+          className="btn-primary w-full py-2.5"
+        >
+          {enviando ? 'Guardando...' : 'Finalizar semana'}
+        </button>
+      </div>
     </Modal>
   )
 }

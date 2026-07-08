@@ -5,21 +5,20 @@ import { useAuth } from '../../lib/useAuth'
 import { Spinner } from '../../components/Spinner'
 import { obtenerSemanaActiva, obtenerVisitasConVentas } from '../../lib/api'
 import { crearSemana, finalizarSemana } from '../../lib/api'
+import { formatMonto } from '../../lib/currency'
 import { IniciarSemanaModal } from './IniciarSemanaModal'
 import { FinalizarSemanaModal } from './FinalizarSemanaModal'
 import { NuevaVisitaModal } from './NuevaVisitaModal'
-import { NuevaVentaModal } from './NuevaVentaModal'
-import { VisitaCard } from '../shared/VisitaCard'
+import { IconBandera, IconRuta, IconTiendas } from '../../components/icons'
 
 export function PanelVendedor() {
-  const { profile, cerrarSesion } = useAuth()
+  const { profile } = useAuth()
   const queryClient = useQueryClient()
   const userId = profile!.id
 
   const [modalIniciar, setModalIniciar] = useState(false)
   const [modalFinalizar, setModalFinalizar] = useState(false)
   const [modalVisita, setModalVisita] = useState(false)
-  const [visitaParaVenta, setVisitaParaVenta] = useState<string | null>(null)
 
   const semanaQuery = useQuery({
     queryKey: ['semana-activa', userId],
@@ -34,109 +33,93 @@ export function PanelVendedor() {
     enabled: !!semana,
   })
 
-  async function manejarIniciarSemana(km: number) {
-    await crearSemana(userId, km)
+  const totalVentas = (visitasQuery.data ?? []).reduce(
+    (suma, v) => suma + v.sales.reduce((s, venta) => s + Number(venta.amount), 0),
+    0,
+  )
+
+  async function manejarIniciarSemana(km: number, fotoPath: string) {
+    await crearSemana(userId, km, fotoPath)
     await queryClient.invalidateQueries({ queryKey: ['semana-activa', userId] })
     setModalIniciar(false)
   }
 
-  async function manejarFinalizarSemana(km: number) {
+  async function manejarFinalizarSemana(km: number, fotoPath: string) {
     if (!semana) return
-    await finalizarSemana(semana.id, km)
+    await finalizarSemana(semana.id, km, fotoPath)
     await queryClient.invalidateQueries({ queryKey: ['semana-activa', userId] })
     setModalFinalizar(false)
-  }
-
-  function refrescarVisitas() {
-    queryClient.invalidateQueries({ queryKey: ['visitas', semana?.id] })
   }
 
   if (semanaQuery.isLoading) return <Spinner texto="Cargando..." />
 
   return (
-    <div className="mx-auto min-h-full max-w-md bg-slate-50 pb-10">
-      <header className="flex items-center justify-between bg-white px-4 py-4 shadow-sm">
-        <div>
-          <p className="text-sm text-slate-500">Hola,</p>
-          <p className="font-semibold text-slate-900">{profile?.full_name}</p>
-        </div>
-        <div className="flex items-center gap-3 text-sm">
-          <Link to="/vendedor/historial" className="font-medium text-brand-700">
-            Historial
-          </Link>
-          <button onClick={cerrarSesion} className="font-medium text-slate-400">
-            Salir
+    <>
+      {!semana && (
+        <div className="card p-6 text-center">
+          <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-brand-50 text-brand-700">
+            <IconRuta width={24} height={24} />
+          </span>
+          <p className="mt-3 font-medium text-slate-700">No tienes una semana activa</p>
+          <p className="mt-1 text-sm text-slate-400">
+            Inicia tu semana para poder registrar visitas y ventas.
+          </p>
+          <button type="button" onClick={() => setModalIniciar(true)} className="btn-primary mt-4 w-full py-3">
+            Iniciar semana
           </button>
         </div>
-      </header>
+      )}
 
-      <main className="space-y-4 p-4">
-        {!semana && (
-          <div className="rounded-2xl bg-white p-5 text-center shadow-sm">
-            <p className="mb-4 text-slate-600">No tienes una semana activa todavía.</p>
-            <button
-              type="button"
-              onClick={() => setModalIniciar(true)}
-              className="w-full rounded-lg bg-brand-700 py-3 font-semibold text-white"
-            >
-              Iniciar semana
-            </button>
-          </div>
-        )}
-
-        {semana && (
-          <>
-            <div className="rounded-2xl bg-white p-4 shadow-sm">
+      {semana && (
+        <>
+          <div className="card overflow-hidden">
+            <div className="h-1.5 bg-gradient-to-r from-ink-700 via-brand-700 to-highlight-400" />
+            <div className="p-4">
               <div className="mb-3 flex items-center justify-between">
                 <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
-                  Semana activa
+                  ● Semana activa
                 </span>
                 <span className="text-xs text-slate-400">
                   Desde {new Date(semana.start_date).toLocaleDateString('es-GT')}
                 </span>
               </div>
-              <p className="text-sm text-slate-500">Kilometraje inicial: {semana.start_mileage_km} km</p>
-            </div>
+              <p className="text-sm text-slate-500">
+                Kilometraje inicial: <span className="font-semibold text-slate-700">{semana.start_mileage_km} km</span>
+              </p>
 
-            <button
-              type="button"
-              onClick={() => setModalVisita(true)}
-              className="w-full rounded-xl bg-brand-700 py-3 font-semibold text-white shadow-sm"
-            >
-              + Registrar visita a tienda
-            </button>
-
-            <div>
-              <h3 className="mb-2 px-1 text-sm font-semibold text-slate-500">Visitas de esta semana</h3>
-              {visitasQuery.isLoading && <Spinner />}
-              <div className="space-y-3">
-                {visitasQuery.data?.map((visita) => (
-                  <VisitaCard
-                    key={visita.id}
-                    visita={visita}
-                    puedeAgregarVenta
-                    onAgregarVenta={setVisitaParaVenta}
-                  />
-                ))}
-                {visitasQuery.data?.length === 0 && (
-                  <p className="px-1 text-sm text-slate-400">Aún no registras visitas esta semana.</p>
-                )}
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="rounded-xl bg-slate-50 p-3 text-center">
+                  <p className="text-xl font-bold text-slate-900">{visitasQuery.data?.length ?? 0}</p>
+                  <p className="text-xs text-slate-500">Visitas esta semana</p>
+                </div>
+                <div className="rounded-xl bg-slate-50 p-3 text-center">
+                  <p className="text-xl font-bold text-slate-900">{formatMonto(totalVentas, profile?.country)}</p>
+                  <p className="text-xs text-slate-500">Vendido esta semana</p>
+                </div>
               </div>
-            </div>
 
-            <button
-              type="button"
-              onClick={() => setModalFinalizar(true)}
-              className="w-full rounded-xl border border-slate-300 py-3 font-semibold text-slate-600"
-            >
-              Finalizar semana
-            </button>
-          </>
-        )}
-      </main>
+              <Link
+                to="/vendedor/ruta"
+                className="mt-3 block text-center text-sm font-semibold text-brand-700 hover:underline"
+              >
+                Ver mi ruta completa →
+              </Link>
+            </div>
+          </div>
+
+          <button type="button" onClick={() => setModalVisita(true)} className="btn-primary w-full py-3.5">
+            <IconTiendas width={20} height={20} /> Registrar visita a tienda
+          </button>
+
+          <button type="button" onClick={() => setModalFinalizar(true)} className="btn-secondary w-full py-3">
+            <IconBandera width={18} height={18} /> Finalizar semana
+          </button>
+        </>
+      )}
 
       <IniciarSemanaModal
         abierto={modalIniciar}
+        userId={userId}
         onCerrar={() => setModalIniciar(false)}
         onConfirmar={manejarIniciarSemana}
       />
@@ -145,33 +128,25 @@ export function PanelVendedor() {
         <FinalizarSemanaModal
           abierto={modalFinalizar}
           kmInicial={semana.start_mileage_km}
+          userId={userId}
           onCerrar={() => setModalFinalizar(false)}
           onConfirmar={manejarFinalizarSemana}
         />
       )}
 
-      {semana && (
+      {semana && profile?.country && (
         <NuevaVisitaModal
           abierto={modalVisita}
           weekId={semana.id}
           userId={userId}
+          country={profile.country}
           onCerrar={() => setModalVisita(false)}
           onCreada={() => {
             setModalVisita(false)
-            refrescarVisitas()
+            queryClient.invalidateQueries({ queryKey: ['visitas', semana.id] })
           }}
         />
       )}
-
-      {visitaParaVenta && (
-        <NuevaVentaModal
-          abierto={!!visitaParaVenta}
-          visitId={visitaParaVenta}
-          userId={userId}
-          onCerrar={() => setVisitaParaVenta(null)}
-          onCreada={refrescarVisitas}
-        />
-      )}
-    </div>
+    </>
   )
 }

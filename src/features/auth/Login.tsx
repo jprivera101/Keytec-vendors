@@ -1,16 +1,18 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../../lib/useAuth'
+import { Logo } from '../../components/Logo'
+import { RUTA_POR_ROL } from './RutaProtegida'
 
 export function Login() {
-  const { session, profile, cargando, iniciarSesion } = useAuth()
+  const { session, profile, cargando, authError, iniciarSesion } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
 
   if (session && profile) {
-    return <Navigate to={profile.role === 'admin' ? '/admin' : '/vendedor'} replace />
+    return <Navigate to={RUTA_POR_ROL[profile.role]} replace />
   }
 
   async function manejarEnvio(e: FormEvent) {
@@ -24,9 +26,11 @@ export function Login() {
 
   return (
     <div className="flex min-h-full items-center justify-center bg-slate-50 px-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-sm">
-        <h1 className="mb-1 text-xl font-bold text-slate-900">Ruta de Ventas</h1>
-        <p className="mb-6 text-sm text-slate-500">Inicia sesión con tu cuenta</p>
+      <div className="card w-full max-w-sm p-6">
+        <div className="mb-6 flex flex-col items-center gap-3">
+          <Logo size={48} />
+          <p className="text-sm text-slate-500">Ruta de Ventas · Inicia sesión con tu cuenta</p>
+        </div>
 
         <form onSubmit={manejarEnvio} className="space-y-4">
           <div>
@@ -36,7 +40,7 @@ export function Login() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-base focus:border-brand-600 focus:outline-none"
+              className="input-field text-base"
               autoComplete="username"
             />
           </div>
@@ -47,18 +51,14 @@ export function Login() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-base focus:border-brand-600 focus:outline-none"
+              className="input-field text-base"
               autoComplete="current-password"
             />
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {(error || authError) && <p className="text-sm text-red-600">{error || authError}</p>}
 
-          <button
-            type="submit"
-            disabled={enviando || cargando}
-            className="w-full rounded-lg bg-brand-700 py-2.5 font-semibold text-white hover:bg-brand-800 disabled:opacity-60"
-          >
+          <button type="submit" disabled={enviando || cargando} className="btn-primary w-full py-2.5">
             {enviando ? 'Entrando...' : 'Entrar'}
           </button>
         </form>

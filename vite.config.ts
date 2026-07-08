@@ -15,7 +15,7 @@ export default defineConfig({
         name: 'Ruta de Ventas',
         short_name: 'Ruta Ventas',
         description: 'Seguimiento de rutas, visitas y ventas de vendedores en campo',
-        theme_color: '#1d4ed8',
+        theme_color: '#382e88',
         background_color: '#ffffff',
         display: 'standalone',
         start_url: '/',
