@@ -8,7 +8,7 @@ import { formatMonto } from '../../lib/currency'
 import { Spinner } from '../../components/Spinner'
 import { BuscadorVendedor } from '../../components/BuscadorVendedor'
 import { PageHeader } from '../../components/PageHeader'
-import { IconAnalitica } from '../../components/icons'
+import { IconAnalitica, IconChevron } from '../../components/icons'
 import { DetalleSemana } from '../shared/DetalleSemana'
 import { MapaRuta } from '../shared/MapaRuta'
 import { NOMBRE_PAIS, type AdminOutletContext } from './AdminLayout'
@@ -38,6 +38,7 @@ export function AnaliticaAdmin() {
   const [modo, setModo] = useState<'individual' | 'todos'>('individual')
   const [anioFiltro, setAnioFiltro] = useState<number | 'ALL'>('ALL')
   const [mesFiltro, setMesFiltro] = useState<number | 'ALL'>('ALL')
+  const [filtrosAbiertos, setFiltrosAbiertos] = useState(false)
 
   const regionesQuery = useQuery({
     queryKey: ['regiones-analitica', pais],
@@ -192,55 +193,80 @@ export function AnaliticaAdmin() {
         </div>
 
         {modo === 'individual' && salesmanId && (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">Año</label>
-              <select
-                value={anioFiltro}
-                onChange={(e) => setAnioFiltro(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value))}
-                className="input-field"
-              >
-                <option value="ALL">Todos</option>
-                {aniosDisponibles.map((anio) => (
-                  <option key={anio} value={anio}>
-                    {anio}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <button
+              type="button"
+              onClick={() => setFiltrosAbiertos((v) => !v)}
+              className="flex w-full items-center justify-between text-left"
+            >
+              <span className="text-xs font-medium text-slate-500">Año, mes y semana</span>
+              <span className="flex items-center gap-1 text-xs font-medium text-slate-400">
+                {!filtrosAbiertos && (
+                  <span>
+                    {anioFiltro === 'ALL' ? 'Todos' : anioFiltro}
+                    {mesFiltro !== 'ALL' && ` · ${MESES[mesFiltro]}`}
+                  </span>
+                )}
+                <IconChevron
+                  className={`transition-transform ${filtrosAbiertos ? 'rotate-180' : ''}`}
+                  width={16}
+                  height={16}
+                />
+              </span>
+            </button>
 
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">Mes</label>
-              <select
-                value={mesFiltro}
-                onChange={(e) => setMesFiltro(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value))}
-                className="input-field"
-              >
-                <option value="ALL">Todos</option>
-                {MESES.map((nombre, i) => (
-                  <option key={nombre} value={i}>
-                    {nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {filtrosAbiertos && (
+              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">Año</label>
+                  <select
+                    value={anioFiltro}
+                    onChange={(e) => setAnioFiltro(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value))}
+                    className="input-field"
+                  >
+                    <option value="ALL">Todos</option>
+                    {aniosDisponibles.map((anio) => (
+                      <option key={anio} value={anio}>
+                        {anio}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">Semana</label>
-              <select
-                value={weekId ?? ''}
-                onChange={(e) => navigate(`/admin/analitica/${salesmanId}/${e.target.value}`)}
-                disabled={!semanasFiltradas.length}
-                className="input-field"
-              >
-                {semanasFiltradas.map((semana) => (
-                  <option key={semana.id} value={semana.id}>
-                    {new Date(semana.start_date).toLocaleDateString('es-GT')}
-                    {semana.status === 'active' ? ' · activa' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">Mes</label>
+                  <select
+                    value={mesFiltro}
+                    onChange={(e) => setMesFiltro(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value))}
+                    className="input-field"
+                  >
+                    <option value="ALL">Todos</option>
+                    {MESES.map((nombre, i) => (
+                      <option key={nombre} value={i}>
+                        {nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">Semana</label>
+                  <select
+                    value={weekId ?? ''}
+                    onChange={(e) => navigate(`/admin/analitica/${salesmanId}/${e.target.value}`)}
+                    disabled={!semanasFiltradas.length}
+                    className="input-field"
+                  >
+                    {semanasFiltradas.map((semana) => (
+                      <option key={semana.id} value={semana.id}>
+                        {new Date(semana.start_date).toLocaleDateString('es-GT')}
+                        {semana.status === 'active' ? ' · activa' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
