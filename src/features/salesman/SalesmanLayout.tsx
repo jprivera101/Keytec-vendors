@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../lib/useAuth'
 import { Logo } from '../../components/Logo'
+import { PoweredByPenthouse } from '../../components/PoweredByPenthouse'
 import { IconHistorial, IconInicio, IconRuta } from '../../components/icons'
 
 const TABS = [
@@ -31,6 +32,7 @@ export function SalesmanLayout() {
 
       <main className="flex-1 space-y-4 p-4 pb-24">
         <Outlet />
+        <PoweredByPenthouse />
       </main>
 
       <nav className="fixed bottom-0 left-1/2 z-20 w-full max-w-md -translate-x-1/2 border-t border-slate-200 bg-white px-2 pb-[env(safe-area-inset-bottom)] shadow-[0_-2px_10px_rgba(0,0,0,0.06)]">

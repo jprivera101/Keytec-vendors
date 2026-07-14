@@ -3,6 +3,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../../lib/useAuth'
 import { Logo } from '../../components/Logo'
+import { PoweredByPenthouse } from '../../components/PoweredByPenthouse'
 import { obtenerRegionesPorPais } from '../../lib/regiones'
 import { IconAnalitica, IconGlobo, IconResumen, IconRoles, IconTiendas, IconVendedores } from '../../components/icons'
 import { Flag } from '../../components/flags'
@@ -156,6 +157,7 @@ export function AdminLayout() {
           <button onClick={cerrarSesion} className="mt-1 text-xs text-white/60 hover:text-white">
             Cerrar sesión
           </button>
+          <PoweredByPenthouse className="mt-3 justify-start text-white/40" />
         </div>
       </aside>
 
@@ -192,6 +194,7 @@ export function AdminLayout() {
 
         <main className="mx-auto max-w-6xl p-4 sm:p-6">
           <Outlet context={{ pais, region: regionFiltro, profile } satisfies AdminOutletContext} />
+          <PoweredByPenthouse className="mt-8 lg:hidden" />
         </main>
       </div>
     </div>

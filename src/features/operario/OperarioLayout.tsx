@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import { useAuth } from '../../lib/useAuth'
 import { Logo } from '../../components/Logo'
+import { PoweredByPenthouse } from '../../components/PoweredByPenthouse'
 
 export function OperarioLayout() {
   const { profile, cerrarSesion } = useAuth()
@@ -24,6 +25,7 @@ export function OperarioLayout() {
 
       <main className="flex-1 space-y-4 p-4">
         <Outlet />
+        <PoweredByPenthouse />
       </main>
     </div>
   )

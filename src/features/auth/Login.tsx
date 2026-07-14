@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../../lib/useAuth'
 import { Logo } from '../../components/Logo'
+import { PoweredByPenthouse } from '../../components/PoweredByPenthouse'
 import { RUTA_POR_ROL } from './RutaProtegida'
 
 export function Login() {
@@ -25,7 +26,7 @@ export function Login() {
   }
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-slate-50 px-4">
+    <div className="flex min-h-full flex-col items-center justify-center bg-slate-50 px-4">
       <div className="card w-full max-w-sm p-6">
         <div className="mb-6 flex flex-col items-center gap-3">
           <Logo size={48} />
@@ -63,6 +64,8 @@ export function Login() {
           </button>
         </form>
       </div>
+
+      <PoweredByPenthouse className="mt-6" />
     </div>
   )
 }
