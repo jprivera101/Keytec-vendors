@@ -19,6 +19,7 @@ interface Props {
 export function VisitaCard({ visita, onAgregarVenta, puedeAgregarVenta, country }: Props) {
   const [expandido, setExpandido] = useState(false)
   const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null)
+  const [fotoVisitaAmpliada, setFotoVisitaAmpliada] = useState(false)
   const totalVenta = visita.sales.reduce((suma, v) => suma + Number(v.amount), 0)
   const fechaHoraVisita = new Date(visita.captured_at).toLocaleString('es-GT', {
     day: '2-digit',
@@ -68,12 +69,15 @@ export function VisitaCard({ visita, onAgregarVenta, puedeAgregarVenta, country 
           <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
             Foto de la visita
           </p>
-          <FotoPrivada
-            bucket="visit-photos"
-            path={visita.photo_path}
-            alt="Foto tomada en la visita a la tienda"
-            className="mb-3 h-40 w-full rounded-lg object-cover"
-          />
+          <button type="button" onClick={() => setFotoVisitaAmpliada(true)} className="mb-3 block w-full">
+            <FotoPrivada
+              bucket="visit-photos"
+              path={visita.photo_path}
+              alt="Foto tomada en la visita a la tienda"
+              className="h-40 w-full rounded-lg object-cover"
+            />
+            <span className="mt-1 block text-center text-[10px] font-medium text-brand-700">Ver foto</span>
+          </button>
 
           {visita.sales.length > 0 && (
             <>
@@ -150,6 +154,19 @@ export function VisitaCard({ visita, onAgregarVenta, puedeAgregarVenta, country 
             </p>
           </>
         )}
+      </Modal>
+
+      <Modal
+        titulo="Foto de la visita"
+        abierto={fotoVisitaAmpliada}
+        onCerrar={() => setFotoVisitaAmpliada(false)}
+      >
+        <FotoPrivada
+          bucket="visit-photos"
+          path={visita.photo_path}
+          alt="Foto tomada en la visita a la tienda"
+          className="max-h-[70vh] w-full rounded-lg object-contain"
+        />
       </Modal>
     </div>
   )
