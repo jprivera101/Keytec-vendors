@@ -9,8 +9,8 @@ export function OperarioLayout() {
   if (!profile) return null
 
   return (
-    <div className="mx-auto flex min-h-full max-w-2xl flex-col bg-slate-50">
-      <header className="flex items-center justify-between bg-ink-700 px-4 py-4 text-white shadow-sm">
+    <div className="mx-auto flex min-h-full w-full max-w-2xl flex-col bg-slate-50 lg:max-w-5xl">
+      <header className="flex items-center justify-between bg-ink-700 px-4 py-4 text-white shadow-sm lg:px-8">
         <div className="flex items-center gap-2.5">
           <Logo variant="icon" light size={30} />
           <div className="leading-tight">
@@ -23,7 +23,7 @@ export function OperarioLayout() {
         </button>
       </header>
 
-      <main className="flex-1 space-y-4 p-4">
+      <main className="flex-1 space-y-4 p-4 lg:p-8">
         <Outlet />
         <PoweredByPenthouse />
       </main>

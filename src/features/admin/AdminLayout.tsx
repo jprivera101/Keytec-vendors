@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../../lib/useAuth'
-import { Logo } from '../../components/Logo'
 import { PoweredByPenthouse } from '../../components/PoweredByPenthouse'
 import { obtenerRegionesPorPais } from '../../lib/regiones'
 import { IconAnalitica, IconGlobo, IconResumen, IconRoles, IconTiendas, IconVendedores } from '../../components/icons'
@@ -125,25 +124,36 @@ export function AdminLayout() {
     )
   }
 
+  const rolEtiqueta = esSuperAdmin
+    ? 'Super admin'
+    : profile.country
+      ? `Admin · ${NOMBRE_PAIS[profile.country]}`
+      : 'Admin'
+
   return (
     <div className="min-h-full bg-slate-50 lg:flex">
-      <aside className="hidden w-64 shrink-0 bg-ink-700 text-white lg:flex lg:flex-col">
-        <div className="px-6 py-6">
-          <Logo light size={34} />
+      <aside className="hidden w-64 shrink-0 flex-col bg-ink-700 text-white lg:flex">
+        <div className="p-4">
+          <img src="/keytec-sidebar.png" alt="KeyTec" className="w-full rounded-xl" />
         </div>
-        <div className="space-y-2 px-3 pb-3">
+
+        <div className="space-y-2 px-3 pb-4">
           <SelectorPais oscuro />
           <SelectorRegion oscuro />
         </div>
-        <nav className="flex-1 space-y-1 px-3">
+
+        <p className="px-6 pb-2 text-[11px] font-semibold uppercase tracking-wide text-white/40">Menú</p>
+        <nav className="space-y-1 px-3">
           {enlaces.map((enlace) => (
             <NavLink
               key={enlace.to}
               to={enlace.to}
               end={enlace.fin}
               className={({ isActive }) =>
-                `flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                  isActive ? 'bg-white/15 text-white' : 'text-white/70 hover:bg-white/10 hover:text-white'
+                `flex items-center gap-2.5 rounded-lg border-l-2 px-3 py-2.5 text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'border-[#0092D2] bg-white/10 text-white'
+                    : 'border-transparent text-white/60 hover:bg-white/5 hover:text-white'
                 }`
               }
             >
@@ -152,18 +162,25 @@ export function AdminLayout() {
             </NavLink>
           ))}
         </nav>
-        <div className="border-t border-white/10 px-6 py-4">
+
+        <div className="flex-1" />
+
+        <div className="mx-3 mb-3 rounded-xl bg-white/5 p-3">
           <p className="truncate text-sm font-medium text-white">{profile.full_name}</p>
-          <button onClick={cerrarSesion} className="mt-1 text-xs text-white/60 hover:text-white">
+          <p className="text-xs text-white/40">{rolEtiqueta}</p>
+          <button onClick={cerrarSesion} className="mt-2 text-xs font-medium text-white/60 hover:text-white">
             Cerrar sesión
           </button>
-          <PoweredByPenthouse className="mt-3 justify-start text-white/40" />
+        </div>
+
+        <div className="border-t border-white/10 px-6 py-4">
+          <PoweredByPenthouse className="justify-start text-white/40" />
         </div>
       </aside>
 
       <div className="flex-1">
         <header className="flex items-center justify-between bg-ink-700 px-4 py-3 text-white lg:hidden">
-          <Logo light size={28} />
+          <img src="/keytec-sidebar.png" alt="KeyTec" className="h-7 w-auto rounded-md" />
           <button onClick={cerrarSesion} className="text-sm text-white/70">
             Salir
           </button>

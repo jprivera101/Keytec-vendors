@@ -73,25 +73,25 @@ export function PanelOperario() {
         subtitle="Revisa la foto de cada venta y márcala como procesada en el CRM."
       />
 
-      <div className="card space-y-4 p-4">
-        <div>
-          <label className="mb-1.5 block text-xs font-medium text-slate-500">Vendedor</label>
-          <select
-            value={vendedorFiltro}
-            onChange={(e) => setVendedorFiltro(e.target.value)}
-            className="input-field"
-          >
-            <option value="ALL">Todos mis vendedores</option>
-            {vendedoresQuery.data?.map((vendedor) => (
-              <option key={vendedor.id} value={vendedor.id}>
-                {vendedor.full_name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="grid gap-4 border-t border-slate-100 pt-4 sm:grid-cols-2">
+      <div className="card p-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div>
+            <label className="mb-1.5 block text-xs font-medium text-slate-500">Vendedor</label>
+            <select
+              value={vendedorFiltro}
+              onChange={(e) => setVendedorFiltro(e.target.value)}
+              className="input-field"
+            >
+              <option value="ALL">Todos mis vendedores</option>
+              {vendedoresQuery.data?.map((vendedor) => (
+                <option key={vendedor.id} value={vendedor.id}>
+                  {vendedor.full_name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="border-t border-slate-100 pt-4 sm:border-t-0 sm:pt-0 lg:border-t-0 lg:pt-0">
             <label className="mb-1.5 block text-xs font-medium text-slate-500">Periodo</label>
             <Segmentado
               valor={semanaFiltro}
@@ -103,7 +103,8 @@ export function PanelOperario() {
               onChange={setSemanaFiltro}
             />
           </div>
-          <div>
+
+          <div className="border-t border-slate-100 pt-4 sm:col-span-2 sm:border-t sm:pt-4 lg:col-span-1 lg:border-t-0 lg:pt-0">
             <label className="mb-1.5 block text-xs font-medium text-slate-500">Estado</label>
             <Segmentado
               valor={estadoFiltro}
@@ -127,51 +128,120 @@ export function PanelOperario() {
           No hay ventas que coincidan con este filtro.
         </div>
       ) : (
-        <div className="space-y-3">
-          {ventas.map((venta) => (
-            <button
-              key={venta.id}
-              type="button"
-              onClick={() => setVentaSeleccionada(venta)}
-              className="card flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-slate-50"
-            >
-              {venta.photoPath ? (
-                <FotoPrivada
-                  bucket="sale-photos"
-                  path={venta.photoPath}
-                  alt="Foto de la venta"
-                  className="h-14 w-14 shrink-0 rounded-lg object-cover"
-                />
-              ) : (
-                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-center text-[10px] text-slate-400">
-                  Sin foto
-                </span>
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold text-slate-900">
-                  {venta.storeName || 'Tienda sin nombre'}
+        <>
+          {/* Móvil/tablet: lista de tarjetas, más fácil de tocar. */}
+          <div className="space-y-3 lg:hidden">
+            {ventas.map((venta) => (
+              <button
+                key={venta.id}
+                type="button"
+                onClick={() => setVentaSeleccionada(venta)}
+                className="card flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-slate-50"
+              >
+                {venta.photoPath ? (
+                  <FotoPrivada
+                    bucket="sale-photos"
+                    path={venta.photoPath}
+                    alt="Foto de la venta"
+                    className="h-14 w-14 shrink-0 rounded-lg object-cover"
+                  />
+                ) : (
+                  <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-center text-[10px] text-slate-400">
+                    Sin foto
+                  </span>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold text-slate-900">
+                    {venta.storeName || 'Tienda sin nombre'}
+                  </p>
+                  <p className="truncate text-xs text-slate-400">
+                    {venta.salesmanName} ·{' '}
+                    {new Date(venta.createdAt).toLocaleString('es-GT', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </p>
+                </div>
+                <p className="shrink-0 text-right font-bold text-slate-900">
+                  {formatMonto(venta.amount, venta.country)}
                 </p>
-                <p className="truncate text-xs text-slate-400">
-                  {venta.salesmanName} ·{' '}
-                  {new Date(venta.createdAt).toLocaleString('es-GT', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </p>
-              </div>
-              <p className="shrink-0 text-right font-bold text-slate-900">
-                {formatMonto(venta.amount, venta.country)}
-              </p>
-              {venta.processed && (
-                <span className="shrink-0 rounded-full bg-green-100 px-3 py-1.5 text-xs font-semibold text-green-700">
-                  ✓ Procesada
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
+                {venta.processed && (
+                  <span className="shrink-0 rounded-full bg-green-100 px-3 py-1.5 text-xs font-semibold text-green-700">
+                    ✓ Procesada
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Escritorio: tabla, para revisar muchas ventas de un vistazo. */}
+          <div className="card hidden overflow-hidden lg:block">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Foto</th>
+                  <th className="px-4 py-3 font-medium">Tienda</th>
+                  <th className="px-4 py-3 font-medium">Vendedor</th>
+                  <th className="px-4 py-3 font-medium">Fecha</th>
+                  <th className="px-4 py-3 font-medium">Monto</th>
+                  <th className="px-4 py-3 font-medium">Estado</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {ventas.map((venta) => (
+                  <tr
+                    key={venta.id}
+                    onClick={() => setVentaSeleccionada(venta)}
+                    className="cursor-pointer transition-colors hover:bg-slate-50"
+                  >
+                    <td className="px-4 py-2.5">
+                      {venta.photoPath ? (
+                        <FotoPrivada
+                          bucket="sale-photos"
+                          path={venta.photoPath}
+                          alt="Foto de la venta"
+                          className="h-10 w-10 rounded-lg object-cover"
+                        />
+                      ) : (
+                        <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-center text-[9px] text-slate-400">
+                          Sin foto
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 font-medium text-slate-900">
+                      {venta.storeName || 'Tienda sin nombre'}
+                    </td>
+                    <td className="px-4 py-3 text-slate-500">{venta.salesmanName}</td>
+                    <td className="px-4 py-3 text-slate-500">
+                      {new Date(venta.createdAt).toLocaleString('es-GT', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </td>
+                    <td className="px-4 py-3 font-semibold text-slate-900">
+                      {formatMonto(venta.amount, venta.country)}
+                    </td>
+                    <td className="px-4 py-3">
+                      {venta.processed ? (
+                        <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">
+                          ✓ Procesada
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                          Pendiente
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       <Modal
