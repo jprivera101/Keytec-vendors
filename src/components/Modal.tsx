@@ -11,7 +11,7 @@ export function Modal({ titulo, abierto, onCerrar, children }: ModalProps) {
   if (!abierto) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center">
+    <div className="fixed inset-0 z-[2000] flex items-end justify-center bg-black/50 sm:items-center">
       <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-2xl border border-slate-100 bg-white p-5 shadow-xl sm:rounded-2xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-slate-900">{titulo}</h2>

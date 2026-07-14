@@ -16,8 +16,14 @@ import { IconProcesar } from '../../components/icons'
 
 type FiltroEstado = 'pendiente' | 'procesada' | 'todas'
 
-function hoyISO() {
-  return new Date().toISOString().slice(0, 10)
+// Fecha local (no UTC): usar toISOString() aquí compara mal cerca de medianoche en
+// Centroamérica (UTC-6) — pasadas las ~6pm el día UTC ya avanzó al "mañana" mientras las
+// ventas de hoy siguen con fecha de hoy, y el filtro "Hoy" las escondía por completo.
+function fechaLocalISO(fecha: Date) {
+  const anio = fecha.getFullYear()
+  const mes = String(fecha.getMonth() + 1).padStart(2, '0')
+  const dia = String(fecha.getDate()).padStart(2, '0')
+  return `${anio}-${mes}-${dia}`
 }
 
 export function PanelOperario() {
@@ -52,10 +58,10 @@ export function PanelOperario() {
     }
   }
 
-  const hoy = hoyISO()
+  const hoy = fechaLocalISO(new Date())
   const ventas = (ventasQuery.data ?? []).filter((venta) => {
     if (vendedorFiltro !== 'ALL' && venta.salesmanId !== vendedorFiltro) return false
-    if (soloHoy && venta.createdAt.slice(0, 10) !== hoy) return false
+    if (soloHoy && fechaLocalISO(new Date(venta.createdAt)) !== hoy) return false
     if (estadoFiltro === 'pendiente' && venta.processed) return false
     if (estadoFiltro === 'procesada' && !venta.processed) return false
     return true
