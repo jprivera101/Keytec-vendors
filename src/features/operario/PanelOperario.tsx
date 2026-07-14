@@ -73,9 +73,9 @@ export function PanelOperario() {
         subtitle="Revisa la foto de cada venta y márcala como procesada en el CRM."
       />
 
-      <div className="card space-y-3 p-4">
+      <div className="card space-y-4 p-4">
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-500">Vendedor</label>
+          <label className="mb-1.5 block text-xs font-medium text-slate-500">Vendedor</label>
           <select
             value={vendedorFiltro}
             onChange={(e) => setVendedorFiltro(e.target.value)}
@@ -90,25 +90,31 @@ export function PanelOperario() {
           </select>
         </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <Segmentado
-            valor={semanaFiltro}
-            opciones={[
-              { valor: 'activa', etiqueta: 'Semana activa' },
-              { valor: 'anteriores', etiqueta: 'Semanas anteriores' },
-              { valor: 'todas', etiqueta: 'Todas' },
-            ]}
-            onChange={setSemanaFiltro}
-          />
-          <Segmentado
-            valor={estadoFiltro}
-            opciones={[
-              { valor: 'pendiente', etiqueta: 'Pendientes' },
-              { valor: 'procesada', etiqueta: 'Procesadas' },
-              { valor: 'todas', etiqueta: 'Todas' },
-            ]}
-            onChange={(v) => setEstadoFiltro(v as FiltroEstado)}
-          />
+        <div className="grid gap-4 border-t border-slate-100 pt-4 sm:grid-cols-2">
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-slate-500">Periodo</label>
+            <Segmentado
+              valor={semanaFiltro}
+              opciones={[
+                { valor: 'activa', etiqueta: 'Activa' },
+                { valor: 'anteriores', etiqueta: 'Anteriores' },
+                { valor: 'todas', etiqueta: 'Todas' },
+              ]}
+              onChange={setSemanaFiltro}
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-slate-500">Estado</label>
+            <Segmentado
+              valor={estadoFiltro}
+              opciones={[
+                { valor: 'pendiente', etiqueta: 'Pendientes' },
+                { valor: 'procesada', etiqueta: 'Procesadas' },
+                { valor: 'todas', etiqueta: 'Todas' },
+              ]}
+              onChange={(v) => setEstadoFiltro(v as FiltroEstado)}
+            />
+          </div>
         </div>
       </div>
 
