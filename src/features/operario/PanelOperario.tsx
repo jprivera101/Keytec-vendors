@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../lib/useAuth'
 import {
@@ -28,6 +28,30 @@ export function PanelOperario() {
   const [fotoZoomAbierta, setFotoZoomAbierta] = useState(false)
   const [procesando, setProcesando] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Segundo check real: el botón "Sí, procesar" no procesa al primer toque, se "arma" y hay
+  // que tocarlo de nuevo dentro de unos segundos. Antes el botón de confirmar aparecía ya
+  // visible apenas se abría el detalle, así que un toque rápido/accidental bastaba para
+  // procesar una venta sin querer (le pasó con una venta de Ulises) — esto obliga a una
+  // segunda acción deliberada, separada en el tiempo, antes de que haga algo.
+  const [confirmando, setConfirmando] = useState(false)
+  const timeoutArmado = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    setConfirmando(false)
+    return () => {
+      if (timeoutArmado.current) clearTimeout(timeoutArmado.current)
+    }
+  }, [ventaSeleccionada?.id])
+
+  function tocarBotonProcesar() {
+    if (!confirmando) {
+      setConfirmando(true)
+      timeoutArmado.current = setTimeout(() => setConfirmando(false), 4000)
+      return
+    }
+    if (timeoutArmado.current) clearTimeout(timeoutArmado.current)
+    confirmarProcesada()
+  }
 
   const vendedoresQuery = useQuery({
     queryKey: ['vendedores-asignados', profile!.id],
@@ -312,7 +336,11 @@ export function PanelOperario() {
               </span>
             ) : (
               <div className="space-y-2">
-                <p className="text-sm text-slate-600">¿Marcar esta venta como procesada en el CRM?</p>
+                <p className="text-sm text-slate-600">
+                  {confirmando
+                    ? 'Confirma de nuevo para procesar esta venta — se cancela solo si no tocas de nuevo.'
+                    : '¿Marcar esta venta como procesada en el CRM?'}
+                </p>
                 <div className="flex gap-2">
                   <button
                     type="button"
@@ -323,11 +351,17 @@ export function PanelOperario() {
                   </button>
                   <button
                     type="button"
-                    onClick={confirmarProcesada}
+                    onClick={tocarBotonProcesar}
                     disabled={procesando === ventaSeleccionada.id}
-                    className="btn-primary btn-sm flex-1"
+                    className={`btn-primary btn-sm flex-1 ${
+                      confirmando ? 'bg-amber-500 shadow-amber-500/25 hover:bg-amber-600' : ''
+                    }`}
                   >
-                    {procesando === ventaSeleccionada.id ? 'Guardando...' : 'Sí, procesar'}
+                    {procesando === ventaSeleccionada.id
+                      ? 'Guardando...'
+                      : confirmando
+                        ? 'Toca de nuevo para confirmar'
+                        : 'Sí, procesar'}
                   </button>
                 </div>
               </div>
