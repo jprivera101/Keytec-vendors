@@ -93,12 +93,9 @@ export function MapaRuta({ visitas, tiendasRegion = [], country, grupos }: Props
 
   // Un "día" es una fecha calendario distinta dentro de las visitas de esta semana; se
   // numeran en orden cronológico (día 1 = la fecha más antigua) para pintar cada uno con
-  // su propio color de marca. Si se pasa "grupos" (vista general por vendedor), esa
-  // agrupación se usa en su lugar.
-  const fechasOrdenadas = grupos
-    ? []
-    : Array.from(new Set(visitas.map((v) => v.captured_at.slice(0, 10)))).sort()
-
+  // su propio color de marca.
+  const fechasOrdenadas = Array.from(new Set(visitas.map((v) => v.captured_at.slice(0, 10)))).sort()
+  const indiceDia = (visita: VisitWithSales) => fechasOrdenadas.indexOf(visita.captured_at.slice(0, 10))
   const visitasPorDia = new Map<string, VisitWithSales[]>()
   for (const visita of visitas) {
     const fecha = visita.captured_at.slice(0, 10)
@@ -106,6 +103,11 @@ export function MapaRuta({ visitas, tiendasRegion = [], country, grupos }: Props
     visitasPorDia.get(fecha)!.push(visita)
   }
 
+  // La leyenda: un color por vendedor (vista general) o un color por día (ruta de un solo
+  // vendedor). En la vista general cada uno tiene su propia numeración 1,2,3... porque son
+  // personas distintas; en la ruta de un día no — la ruta completa de la semana se numera de
+  // forma continua (1..N) y se dibuja como una sola línea conectada, aunque el color de cada
+  // tramo cambie según el día en el que cae el punto de llegada.
   const gruposFinal: Grupo[] =
     grupos ??
     fechasOrdenadas.map((fecha, i) => ({
@@ -117,14 +119,20 @@ export function MapaRuta({ visitas, tiendasRegion = [], country, grupos }: Props
       visitas: visitasPorDia.get(fecha)!,
     }))
 
-  // Cada visita se numera dentro de su propio grupo (no globalmente), en orden cronológico:
-  // así cada vendedor/día tiene su propia secuencia 1, 2, 3... fácil de seguir en el mapa.
+  const visitasOrdenadas = [...visitas].sort((a, b) => a.captured_at.localeCompare(b.captured_at))
   const colorPorVisitaId = new Map<string, string>()
   const numeroPorVisitaId = new Map<string, number>()
-  for (const grupo of gruposFinal) {
-    const ordenadas = [...grupo.visitas].sort((a, b) => a.captured_at.localeCompare(b.captured_at))
-    ordenadas.forEach((visita, idx) => {
-      colorPorVisitaId.set(visita.id, grupo.color)
+  if (grupos) {
+    for (const grupo of grupos) {
+      const ordenadas = [...grupo.visitas].sort((a, b) => a.captured_at.localeCompare(b.captured_at))
+      ordenadas.forEach((visita, idx) => {
+        colorPorVisitaId.set(visita.id, grupo.color)
+        numeroPorVisitaId.set(visita.id, idx + 1)
+      })
+    }
+  } else {
+    visitasOrdenadas.forEach((visita, idx) => {
+      colorPorVisitaId.set(visita.id, colorDelDia(indiceDia(visita)))
       numeroPorVisitaId.set(visita.id, idx + 1)
     })
   }
@@ -138,15 +146,31 @@ export function MapaRuta({ visitas, tiendasRegion = [], country, grupos }: Props
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           <AjustarLimites posiciones={todasLasPosiciones} />
-          {gruposFinal.map((grupo) => {
-            const ordenadas = [...grupo.visitas].sort((a, b) => a.captured_at.localeCompare(b.captured_at))
-            const puntos = ordenadas.map((v) => [v.latitude, v.longitude] as [number, number])
-            return (
-              puntos.length > 1 && (
-                <Polyline key={grupo.etiqueta} positions={puntos} color={grupo.color} weight={3} />
-              )
-            )
-          })}
+          {grupos
+            ? // Vista general: una línea por vendedor, sin conectar entre personas distintas.
+              gruposFinal.map((grupo) => {
+                const ordenadas = [...grupo.visitas].sort((a, b) => a.captured_at.localeCompare(b.captured_at))
+                const puntos = ordenadas.map((v) => [v.latitude, v.longitude] as [number, number])
+                return (
+                  puntos.length > 1 && (
+                    <Polyline key={grupo.etiqueta} positions={puntos} color={grupo.color} weight={3} />
+                  )
+                )
+              })
+            : // Ruta de un vendedor: una sola línea continua para toda la semana — el color de
+              // cada tramo es el del día del punto de llegada, para marcar dónde empieza un
+              // día nuevo sin cortar la ruta.
+              visitasOrdenadas.slice(1).map((visita, i) => (
+                <Polyline
+                  key={visita.id}
+                  positions={[
+                    [visitasOrdenadas[i].latitude, visitasOrdenadas[i].longitude],
+                    [visita.latitude, visita.longitude],
+                  ]}
+                  color={colorPorVisitaId.get(visita.id)}
+                  weight={3}
+                />
+              ))}
           {tiendasRegion.map((tienda) => (
             <Marker
               key={tienda.id}
