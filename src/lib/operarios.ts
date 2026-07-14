@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient'
-import type { CountryCode, Profile } from './types'
+import type { CountryCode, Profile, WeekStatus } from './types'
 
 export interface OperarioConAsignados extends Profile {
   asignados: number
@@ -77,6 +77,8 @@ export interface VentaOperario {
   salesmanId: string
   salesmanName: string
   country: CountryCode | null
+  weekId: string
+  weekStatus: WeekStatus
 }
 
 interface FilaVentaOperario {
@@ -88,6 +90,8 @@ interface FilaVentaOperario {
   visits: {
     store_name: string | null
     weeks: {
+      id: string
+      status: WeekStatus
       salesman_id: string
       profiles: { full_name: string; country: CountryCode | null } | null
     } | null
@@ -95,12 +99,14 @@ interface FilaVentaOperario {
 }
 
 /** Todas las ventas visibles para el operario actual (la RLS ya las limita a sus vendedores
- * asignados); el filtrado por vendedor/fecha/estado se hace en el cliente. */
+ * asignados); el filtrado por vendedor/semana/estado se hace en el cliente. Se filtra por
+ * semana activa vs. anteriores en vez de "hoy" (fecha) porque comparar fechas de calendario
+ * cerca de medianoche en la zona horaria local resultó frágil y confuso. */
 export async function obtenerVentasOperario(): Promise<VentaOperario[]> {
   const { data, error } = await supabase
     .from('sales')
     .select(
-      'id, amount, photo_path, created_at, processed, visits(store_name, weeks(salesman_id, profiles(full_name, country)))',
+      'id, amount, photo_path, created_at, processed, visits(store_name, weeks(id, status, salesman_id, profiles(full_name, country)))',
     )
     .order('created_at', { ascending: false })
   if (error) throw error
@@ -119,6 +125,8 @@ export async function obtenerVentasOperario(): Promise<VentaOperario[]> {
         salesmanId: semana.salesman_id,
         salesmanName: semana.profiles?.full_name ?? 'Vendedor',
         country: semana.profiles?.country ?? null,
+        weekId: semana.id,
+        weekStatus: semana.status,
       },
     ]
   })

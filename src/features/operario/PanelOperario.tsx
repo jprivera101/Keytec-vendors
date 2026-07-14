@@ -15,22 +15,13 @@ import { PageHeader } from '../../components/PageHeader'
 import { IconProcesar } from '../../components/icons'
 
 type FiltroEstado = 'pendiente' | 'procesada' | 'todas'
-
-// Fecha local (no UTC): usar toISOString() aquí compara mal cerca de medianoche en
-// Centroamérica (UTC-6) — pasadas las ~6pm el día UTC ya avanzó al "mañana" mientras las
-// ventas de hoy siguen con fecha de hoy, y el filtro "Hoy" las escondía por completo.
-function fechaLocalISO(fecha: Date) {
-  const anio = fecha.getFullYear()
-  const mes = String(fecha.getMonth() + 1).padStart(2, '0')
-  const dia = String(fecha.getDate()).padStart(2, '0')
-  return `${anio}-${mes}-${dia}`
-}
+type FiltroSemana = 'activa' | 'anteriores' | 'todas'
 
 export function PanelOperario() {
   const { profile } = useAuth()
   const queryClient = useQueryClient()
   const [vendedorFiltro, setVendedorFiltro] = useState<string | 'ALL'>('ALL')
-  const [soloHoy, setSoloHoy] = useState(true)
+  const [semanaFiltro, setSemanaFiltro] = useState<FiltroSemana>('activa')
   const [estadoFiltro, setEstadoFiltro] = useState<FiltroEstado>('pendiente')
   const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null)
   const [procesando, setProcesando] = useState<string | null>(null)
@@ -58,10 +49,10 @@ export function PanelOperario() {
     }
   }
 
-  const hoy = fechaLocalISO(new Date())
   const ventas = (ventasQuery.data ?? []).filter((venta) => {
     if (vendedorFiltro !== 'ALL' && venta.salesmanId !== vendedorFiltro) return false
-    if (soloHoy && fechaLocalISO(new Date(venta.createdAt)) !== hoy) return false
+    if (semanaFiltro === 'activa' && venta.weekStatus !== 'active') return false
+    if (semanaFiltro === 'anteriores' && venta.weekStatus !== 'completed') return false
     if (estadoFiltro === 'pendiente' && venta.processed) return false
     if (estadoFiltro === 'procesada' && !venta.processed) return false
     return true
@@ -95,12 +86,13 @@ export function PanelOperario() {
 
         <div className="flex flex-col gap-3 sm:flex-row">
           <Segmentado
-            valor={soloHoy ? 'hoy' : 'todas'}
+            valor={semanaFiltro}
             opciones={[
-              { valor: 'hoy', etiqueta: 'Hoy' },
-              { valor: 'todas', etiqueta: 'Todas las fechas' },
+              { valor: 'activa', etiqueta: 'Semana activa' },
+              { valor: 'anteriores', etiqueta: 'Semanas anteriores' },
+              { valor: 'todas', etiqueta: 'Todas' },
             ]}
-            onChange={(v) => setSoloHoy(v === 'hoy')}
+            onChange={setSemanaFiltro}
           />
           <Segmentado
             valor={estadoFiltro}
