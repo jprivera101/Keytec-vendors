@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { FotoPrivada } from '../../components/FotoPrivada'
+import { Modal } from '../../components/Modal'
 import { IconChevron } from '../../components/icons'
 import { formatMonto } from '../../lib/currency'
 import type { CountryCode, GasolinaRegistro } from '../../lib/types'
@@ -9,9 +10,17 @@ interface Props {
   country?: CountryCode | null
 }
 
-/** Fila compacta (⛽ + monto); expande para ver las 3 fotos (tanque antes/después + factura). */
+const ETIQUETAS_FOTO = {
+  initial_tank_photo_path: 'Tanque antes de cargar',
+  final_tank_photo_path: 'Tanque después de cargar',
+  receipt_photo_path: 'Factura',
+} as const
+
+/** Fila compacta (⛽ + monto); expande para ver las 3 fotos (tanque antes/después + factura),
+ * cada una ampliable con un toque para verificarla bien. */
 export function GasolinaCard({ registro, country }: Props) {
   const [expandido, setExpandido] = useState(false)
+  const [fotoAmpliada, setFotoAmpliada] = useState<keyof typeof ETIQUETAS_FOTO | null>(null)
   const fecha = new Date(registro.created_at).toLocaleString('es-GT', {
     day: '2-digit',
     month: '2-digit',
@@ -42,28 +51,64 @@ export function GasolinaCard({ registro, country }: Props) {
 
       {expandido && (
         <div className="grid grid-cols-3 gap-2 border-t border-slate-100 p-3">
-          <FotoConEtiqueta bucket="gasoline-photos" path={registro.initial_tank_photo_path} etiqueta="Antes" />
-          <FotoConEtiqueta bucket="gasoline-photos" path={registro.final_tank_photo_path} etiqueta="Después" />
-          <FotoConEtiqueta bucket="gasoline-photos" path={registro.receipt_photo_path} etiqueta="Factura" />
+          <FotoConEtiqueta
+            campo="initial_tank_photo_path"
+            path={registro.initial_tank_photo_path}
+            etiqueta="Antes"
+            onVerMasGrande={() => setFotoAmpliada('initial_tank_photo_path')}
+          />
+          <FotoConEtiqueta
+            campo="final_tank_photo_path"
+            path={registro.final_tank_photo_path}
+            etiqueta="Después"
+            onVerMasGrande={() => setFotoAmpliada('final_tank_photo_path')}
+          />
+          <FotoConEtiqueta
+            campo="receipt_photo_path"
+            path={registro.receipt_photo_path}
+            etiqueta="Factura"
+            onVerMasGrande={() => setFotoAmpliada('receipt_photo_path')}
+          />
         </div>
       )}
+
+      <Modal
+        titulo={fotoAmpliada ? ETIQUETAS_FOTO[fotoAmpliada] : ''}
+        abierto={!!fotoAmpliada}
+        onCerrar={() => setFotoAmpliada(null)}
+      >
+        {fotoAmpliada && (
+          <FotoPrivada
+            bucket="gasoline-photos"
+            path={registro[fotoAmpliada]}
+            alt={ETIQUETAS_FOTO[fotoAmpliada]}
+            className="max-h-[70vh] w-full rounded-lg object-contain"
+          />
+        )}
+      </Modal>
     </div>
   )
 }
 
 function FotoConEtiqueta({
-  bucket,
   path,
   etiqueta,
+  onVerMasGrande,
 }: {
-  bucket: 'gasoline-photos'
+  campo: keyof typeof ETIQUETAS_FOTO
   path: string
   etiqueta: string
+  onVerMasGrande: () => void
 }) {
   return (
-    <div className="text-center">
-      <FotoPrivada bucket={bucket} path={path} alt={etiqueta} className="h-20 w-full rounded-lg object-cover" />
+    <button type="button" onClick={onVerMasGrande} className="text-center">
+      <FotoPrivada
+        bucket="gasoline-photos"
+        path={path}
+        alt={etiqueta}
+        className="h-20 w-full rounded-lg object-cover"
+      />
       <p className="mt-1 text-[10px] text-slate-400">{etiqueta}</p>
-    </div>
+    </button>
   )
 }

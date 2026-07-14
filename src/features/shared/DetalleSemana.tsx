@@ -12,6 +12,7 @@ import { MapaRuta } from './MapaRuta'
 import { VisitaCard } from './VisitaCard'
 import { GasolinaCard } from './GasolinaCard'
 import { EnvioCard } from './EnvioCard'
+import { TiendaRegionCard } from './TiendaRegionCard'
 import type { CountryCode, TiendaConLugar } from '../../lib/types'
 
 export function DetalleSemana({
@@ -57,12 +58,13 @@ export function DetalleSemana({
   const totalVentas =
     visitas.reduce((suma, v) => suma + v.sales.reduce((s, venta) => s + Number(venta.amount), 0), 0) +
     ventasEnvio.reduce((suma, v) => suma + Number(v.amount), 0)
+  const totalGasolina = gasolina.reduce((suma, g) => suma + Number(g.amount), 0)
   const kmRecorridos =
     semana.end_mileage_km != null ? semana.end_mileage_km - semana.start_mileage_km : null
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <StatCard
           etiqueta="Estado"
           valor={semana.status === 'active' ? 'Activa' : 'Completada'}
@@ -70,6 +72,7 @@ export function DetalleSemana({
         <StatCard etiqueta="Km recorridos" valor={kmRecorridos != null ? `${kmRecorridos} km` : '—'} />
         <StatCard etiqueta="Visitas" valor={String(visitas.length)} />
         <StatCard etiqueta="Total vendido" valor={formatMonto(totalVentas, country)} />
+        <StatCard etiqueta="⛽ Gasolina" valor={formatMonto(totalGasolina, country)} />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -78,6 +81,17 @@ export function DetalleSemana({
       </div>
 
       <MapaRuta visitas={visitas} tiendasRegion={tiendasRegion} country={country} />
+
+      {tiendasRegion && tiendasRegion.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-slate-500">Tiendas de la región</h3>
+          <div className="space-y-3">
+            {tiendasRegion.map((tienda) => (
+              <TiendaRegionCard key={tienda.id} tienda={tienda} />
+            ))}
+          </div>
+        </div>
+      )}
 
       <div>
         <h3 className="mb-2 text-sm font-semibold text-slate-500">Visitas</h3>

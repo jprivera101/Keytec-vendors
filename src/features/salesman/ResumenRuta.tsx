@@ -5,9 +5,11 @@ import {
   obtenerGasolinaDeSemana,
   obtenerVentasEnvioDeSemana,
 } from '../../lib/api'
+import { obtenerTiendasPorRegion } from '../../lib/tiendas'
 import { formatMonto } from '../../lib/currency'
 import { useAuth } from '../../lib/useAuth'
 import { Spinner } from '../../components/Spinner'
+import { MapaRuta } from '../shared/MapaRuta'
 import { VisitaCard } from '../shared/VisitaCard'
 import { GasolinaCard } from '../shared/GasolinaCard'
 import { EnvioCard } from '../shared/EnvioCard'
@@ -19,8 +21,10 @@ interface Props {
 }
 
 /** Vista simple para el vendedor: un resumen limpio de la semana (visitas, tiendas distintas,
- * total vendido, km recorridos) y sus visitas en formato compacto. Sin mapa ni fotos grandes
- * de por medio — esas quedan para Analítica, que es la vista detallada del admin. */
+ * total vendido, km recorridos), el mapa de su ruta y sus visitas en formato compacto. El
+ * mapa solo muestra su propia semana y las tiendas de su región que ÉL registró — la RLS de
+ * "stores" ya filtra por created_by, así que si otro vendedor comparte la misma región, sus
+ * tiendas no aparecen aquí. */
 export function ResumenRuta({ weekId, puedeAgregarVenta = false, onAgregarVenta = () => {} }: Props) {
   const { profile } = useAuth()
   const semanaQuery = useQuery({
@@ -38,6 +42,11 @@ export function ResumenRuta({ weekId, puedeAgregarVenta = false, onAgregarVenta 
   const ventasEnvioQuery = useQuery({
     queryKey: ['ventas-envio', weekId],
     queryFn: () => obtenerVentasEnvioDeSemana(weekId),
+  })
+  const tiendasRegionQuery = useQuery({
+    queryKey: ['tiendas-region', profile?.route_id],
+    queryFn: () => obtenerTiendasPorRegion(profile!.route_id!),
+    enabled: !!profile?.route_id,
   })
 
   if (semanaQuery.isLoading || visitasQuery.isLoading) return <Spinner texto="Cargando..." />
@@ -84,6 +93,8 @@ export function ResumenRuta({ weekId, puedeAgregarVenta = false, onAgregarVenta 
         <StatTile etiqueta="Tiendas" valor={String(tiendasDistintas)} />
         <StatTile etiqueta="Km recorridos" valor={kmRecorridos != null ? `${kmRecorridos}` : '—'} />
       </div>
+
+      <MapaRuta visitas={visitas} tiendasRegion={tiendasRegionQuery.data ?? []} country={profile?.country} />
 
       <div>
         <h3 className="mb-2 text-sm font-semibold text-slate-500">Visitas</h3>
