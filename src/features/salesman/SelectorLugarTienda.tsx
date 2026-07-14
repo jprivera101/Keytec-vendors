@@ -1,7 +1,8 @@
+import { BuscadorTienda } from '../../components/BuscadorTienda'
+import { NUEVO_LUGAR, NUEVA_TIENDA } from '../../lib/tiendaConstants'
 import type { Place, Store } from '../../lib/types'
 
-export const NUEVO_LUGAR = '__nuevo_lugar__'
-export const NUEVA_TIENDA = '__nueva_tienda__'
+export { NUEVO_LUGAR, NUEVA_TIENDA }
 
 interface Props {
   lugares: Place[]
@@ -92,22 +93,7 @@ export function SelectorLugarTienda({
       {hayLugarSeleccionado && (
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Tienda</label>
-          <select
-            required
-            value={tiendaId}
-            onChange={(e) => onTiendaIdChange(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-base focus:border-brand-600 focus:outline-none"
-          >
-            <option value="" disabled>
-              Selecciona una tienda
-            </option>
-            {tiendas.map((tienda) => (
-              <option key={tienda.id} value={tienda.id}>
-                {tienda.name}
-              </option>
-            ))}
-            <option value={NUEVA_TIENDA}>+ Nueva tienda</option>
-          </select>
+          <BuscadorTienda tiendas={tiendas} valor={tiendaId} onSeleccionar={onTiendaIdChange} />
           {tiendaId === NUEVA_TIENDA && (
             <input
               type="text"

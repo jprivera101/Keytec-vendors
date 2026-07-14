@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   obtenerSemanaPorId,
@@ -8,11 +9,11 @@ import {
 import { formatMonto } from '../../lib/currency'
 import { Spinner } from '../../components/Spinner'
 import { FotoPrivada } from '../../components/FotoPrivada'
+import { Modal } from '../../components/Modal'
 import { MapaRuta } from './MapaRuta'
 import { VisitaCard } from './VisitaCard'
 import { GasolinaCard } from './GasolinaCard'
 import { EnvioCard } from './EnvioCard'
-import { TiendaRegionCard } from './TiendaRegionCard'
 import type { CountryCode, TiendaConLugar } from '../../lib/types'
 
 export function DetalleSemana({
@@ -48,6 +49,8 @@ export function DetalleSemana({
     queryFn: () => obtenerVentasEnvioDeSemana(weekId),
   })
 
+  const [gasolinaAbierta, setGasolinaAbierta] = useState(false)
+
   if (semanaQuery.isLoading || visitasQuery.isLoading) return <Spinner texto="Cargando semana..." />
   if (!semanaQuery.data) return <p className="p-4 text-sm text-red-600">No se encontró la semana</p>
 
@@ -72,7 +75,11 @@ export function DetalleSemana({
         <StatCard etiqueta="Km recorridos" valor={kmRecorridos != null ? `${kmRecorridos} km` : '—'} />
         <StatCard etiqueta="Visitas" valor={String(visitas.length)} />
         <StatCard etiqueta="Total vendido" valor={formatMonto(totalVentas, country)} />
-        <StatCard etiqueta="⛽ Gasolina" valor={formatMonto(totalGasolina, country)} />
+        <StatCard
+          etiqueta="⛽ Gasolina"
+          valor={formatMonto(totalGasolina, country)}
+          onClick={gasolina.length > 0 ? () => setGasolinaAbierta(true) : undefined}
+        />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -81,17 +88,6 @@ export function DetalleSemana({
       </div>
 
       <MapaRuta visitas={visitas} tiendasRegion={tiendasRegion} country={country} />
-
-      {tiendasRegion && tiendasRegion.length > 0 && (
-        <div>
-          <h3 className="mb-2 text-sm font-semibold text-slate-500">Tiendas de la región</h3>
-          <div className="space-y-3">
-            {tiendasRegion.map((tienda) => (
-              <TiendaRegionCard key={tienda.id} tienda={tienda} />
-            ))}
-          </div>
-        </div>
-      )}
 
       <div>
         <h3 className="mb-2 text-sm font-semibold text-slate-500">Visitas</h3>
@@ -120,27 +116,43 @@ export function DetalleSemana({
         </div>
       )}
 
-      {gasolina.length > 0 && (
-        <div>
-          <h3 className="mb-2 text-sm font-semibold text-slate-500">Gasolina</h3>
-          <div className="space-y-3">
-            {gasolina.map((registro) => (
-              <GasolinaCard key={registro.id} registro={registro} country={country} />
-            ))}
-          </div>
+      <Modal titulo="Gasolina de la semana" abierto={gasolinaAbierta} onCerrar={() => setGasolinaAbierta(false)}>
+        <div className="space-y-3">
+          {gasolina.map((registro) => (
+            <GasolinaCard key={registro.id} registro={registro} country={country} />
+          ))}
         </div>
-      )}
+      </Modal>
     </div>
   )
 }
 
-function StatCard({ etiqueta, valor }: { etiqueta: string; valor: string }) {
-  return (
-    <div className="card p-3 text-center">
+function StatCard({
+  etiqueta,
+  valor,
+  onClick,
+}: {
+  etiqueta: string
+  valor: string
+  onClick?: () => void
+}) {
+  const contenido = (
+    <>
       <p className="text-xs text-slate-400">{etiqueta}</p>
       <p className="mt-1 text-sm font-bold text-slate-900">{valor}</p>
-    </div>
+      {onClick && <p className="mt-0.5 text-[10px] font-medium text-brand-700">Ver detalle →</p>}
+    </>
   )
+
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className="card p-3 text-center transition-colors hover:bg-slate-50">
+        {contenido}
+      </button>
+    )
+  }
+
+  return <div className="card p-3 text-center">{contenido}</div>
 }
 
 function FotoKilometraje({
