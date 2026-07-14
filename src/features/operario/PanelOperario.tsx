@@ -24,6 +24,7 @@ export function PanelOperario() {
   const [semanaFiltro, setSemanaFiltro] = useState<FiltroSemana>('activa')
   const [estadoFiltro, setEstadoFiltro] = useState<FiltroEstado>('pendiente')
   const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null)
+  const [ventaAConfirmar, setVentaAConfirmar] = useState<VentaOperario | null>(null)
   const [procesando, setProcesando] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -47,6 +48,13 @@ export function PanelOperario() {
     } finally {
       setProcesando(null)
     }
+  }
+
+  async function confirmarProcesada() {
+    if (!ventaAConfirmar) return
+    const venta = ventaAConfirmar
+    setVentaAConfirmar(null)
+    await marcar(venta, true)
   }
 
   const ventas = (ventasQuery.data ?? []).filter((venta) => {
@@ -156,7 +164,7 @@ export function PanelOperario() {
               ) : (
                 <button
                   type="button"
-                  onClick={() => marcar(venta, true)}
+                  onClick={() => setVentaAConfirmar(venta)}
                   disabled={procesando === venta.id}
                   className="btn-primary btn-sm shrink-0"
                 >
@@ -176,6 +184,37 @@ export function PanelOperario() {
             alt="Foto de la venta"
             className="max-h-[70vh] w-full rounded-lg object-contain"
           />
+        )}
+      </Modal>
+
+      <Modal
+        titulo="¿Confirmar procesado?"
+        abierto={!!ventaAConfirmar}
+        onCerrar={() => setVentaAConfirmar(null)}
+      >
+        {ventaAConfirmar && (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              ¿Estás seguro que quieres marcar como procesada la venta de{' '}
+              <span className="font-semibold text-slate-900">
+                {ventaAConfirmar.storeName || 'Tienda sin nombre'}
+              </span>{' '}
+              por <span className="font-semibold text-slate-900">{formatMonto(ventaAConfirmar.amount, ventaAConfirmar.country)}</span>{' '}
+              ({ventaAConfirmar.salesmanName})? Ya no podrás deshacer esto desde aquí.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setVentaAConfirmar(null)}
+                className="btn-secondary btn-sm flex-1"
+              >
+                Cancelar
+              </button>
+              <button type="button" onClick={confirmarProcesada} className="btn-primary btn-sm flex-1">
+                Sí, procesar
+              </button>
+            </div>
+          </div>
         )}
       </Modal>
     </div>
