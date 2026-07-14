@@ -1,10 +1,17 @@
 import { useQuery } from '@tanstack/react-query'
-import { obtenerSemanaPorId, obtenerVisitasConVentas } from '../../lib/api'
+import {
+  obtenerSemanaPorId,
+  obtenerVisitasConVentas,
+  obtenerGasolinaDeSemana,
+  obtenerVentasEnvioDeSemana,
+} from '../../lib/api'
 import { formatMonto } from '../../lib/currency'
 import { Spinner } from '../../components/Spinner'
 import { FotoPrivada } from '../../components/FotoPrivada'
 import { MapaRuta } from './MapaRuta'
 import { VisitaCard } from './VisitaCard'
+import { GasolinaCard } from './GasolinaCard'
+import { EnvioCard } from './EnvioCard'
 import type { CountryCode, TiendaConLugar } from '../../lib/types'
 
 export function DetalleSemana({
@@ -30,15 +37,26 @@ export function DetalleSemana({
     queryFn: () => obtenerVisitasConVentas(weekId),
   })
 
+  const gasolinaQuery = useQuery({
+    queryKey: ['gasolina', weekId],
+    queryFn: () => obtenerGasolinaDeSemana(weekId),
+  })
+
+  const ventasEnvioQuery = useQuery({
+    queryKey: ['ventas-envio', weekId],
+    queryFn: () => obtenerVentasEnvioDeSemana(weekId),
+  })
+
   if (semanaQuery.isLoading || visitasQuery.isLoading) return <Spinner texto="Cargando semana..." />
   if (!semanaQuery.data) return <p className="p-4 text-sm text-red-600">No se encontró la semana</p>
 
   const semana = semanaQuery.data
   const visitas = visitasQuery.data ?? []
-  const totalVentas = visitas.reduce(
-    (suma, v) => suma + v.sales.reduce((s, venta) => s + Number(venta.amount), 0),
-    0,
-  )
+  const gasolina = gasolinaQuery.data ?? []
+  const ventasEnvio = ventasEnvioQuery.data ?? []
+  const totalVentas =
+    visitas.reduce((suma, v) => suma + v.sales.reduce((s, venta) => s + Number(venta.amount), 0), 0) +
+    ventasEnvio.reduce((suma, v) => suma + Number(v.amount), 0)
   const kmRecorridos =
     semana.end_mileage_km != null ? semana.end_mileage_km - semana.start_mileage_km : null
 
@@ -76,6 +94,28 @@ export function DetalleSemana({
           {visitas.length === 0 && <p className="text-sm text-slate-400">Sin visitas registradas.</p>}
         </div>
       </div>
+
+      {ventasEnvio.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-slate-500">Ventas por envío</h3>
+          <div className="space-y-3">
+            {ventasEnvio.map((venta) => (
+              <EnvioCard key={venta.id} venta={venta} country={country} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {gasolina.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-slate-500">Gasolina</h3>
+          <div className="space-y-3">
+            {gasolina.map((registro) => (
+              <GasolinaCard key={registro.id} registro={registro} country={country} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

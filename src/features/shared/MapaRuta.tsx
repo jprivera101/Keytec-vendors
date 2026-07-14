@@ -6,10 +6,20 @@ import { FotoPrivada } from '../../components/FotoPrivada'
 import { formatMonto } from '../../lib/currency'
 import type { CountryCode, TiendaConLugar, VisitWithSales } from '../../lib/types'
 
-function iconoNumerado(numero: number) {
+// Colores de marca, uno por día de la ruta (para distinguir de un vistazo qué visitas
+// pasaron el mismo día): azul, amarillo, morado — y se repiten si la semana tiene más días.
+const COLORES_DIA = ['#2D77BD', '#FFCE07', '#382E88']
+
+function colorDelDia(indiceDia: number) {
+  return COLORES_DIA[indiceDia % COLORES_DIA.length]
+}
+
+function iconoNumerado(numero: number, color: string) {
+  // El amarillo de marca es muy claro: el número necesita texto oscuro ahí para leerse bien.
+  const textoOscuro = color === '#FFCE07'
   return L.divIcon({
     className: '',
-    html: `<div style="background:#1d4ed8;color:white;width:28px;height:28px;border-radius:9999px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.4)">${numero}</div>`,
+    html: `<div style="background:${color};color:${textoOscuro ? '#382E88' : 'white'};width:28px;height:28px;border-radius:9999px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.4)">${numero}</div>`,
     iconSize: [28, 28],
     iconAnchor: [14, 14],
   })
@@ -71,6 +81,19 @@ export function MapaRuta({ visitas, tiendasRegion = [], country }: Props) {
     )
   }
 
+  // Un "día" es una fecha calendario distinta dentro de las visitas de esta semana; se
+  // numeran en orden cronológico (día 1 = la fecha más antigua) para pintar cada uno con
+  // su propio color de marca.
+  const fechasOrdenadas = Array.from(new Set(visitas.map((v) => v.captured_at.slice(0, 10)))).sort()
+  const indiceDia = (visita: VisitWithSales) => fechasOrdenadas.indexOf(visita.captured_at.slice(0, 10))
+
+  const visitasPorDia = new Map<string, VisitWithSales[]>()
+  for (const visita of visitas) {
+    const fecha = visita.captured_at.slice(0, 10)
+    if (!visitasPorDia.has(fecha)) visitasPorDia.set(fecha, [])
+    visitasPorDia.get(fecha)!.push(visita)
+  }
+
   return (
     <div>
       <div className="h-80 w-full overflow-hidden rounded-xl">
@@ -80,7 +103,12 @@ export function MapaRuta({ visitas, tiendasRegion = [], country }: Props) {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           <AjustarLimites posiciones={todasLasPosiciones} />
-          {posicionesVisitas.length > 1 && <Polyline positions={posicionesVisitas} color="#1d4ed8" weight={3} />}
+          {fechasOrdenadas.map((fecha, i) => {
+            const puntos = visitasPorDia.get(fecha)!.map((v) => [v.latitude, v.longitude] as [number, number])
+            return (
+              puntos.length > 1 && <Polyline key={fecha} positions={puntos} color={colorDelDia(i)} weight={3} />
+            )
+          })}
           {tiendasRegion.map((tienda) => (
             <Marker
               key={tienda.id}
@@ -115,7 +143,11 @@ export function MapaRuta({ visitas, tiendasRegion = [], country }: Props) {
           {visitas.map((visita, i) => {
             const total = visita.sales.reduce((s, v) => s + Number(v.amount), 0)
             return (
-              <Marker key={visita.id} position={[visita.latitude, visita.longitude]} icon={iconoNumerado(i + 1)}>
+              <Marker
+                key={visita.id}
+                position={[visita.latitude, visita.longitude]}
+                icon={iconoNumerado(i + 1, colorDelDia(indiceDia(visita)))}
+              >
                 <Popup>
                   <div className="w-40">
                     <FotoPrivada
@@ -138,16 +170,25 @@ export function MapaRuta({ visitas, tiendasRegion = [], country }: Props) {
           })}
         </MapContainer>
       </div>
-      {tiendasRegion.length > 0 && (
-        <p className="mt-2 flex items-center gap-4 text-xs text-slate-500">
-          <span className="flex items-center gap-1">
-            <span className="inline-block h-3 w-3 rounded-full bg-[#1d4ed8]" /> Visita registrada
+      <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-500">
+        {fechasOrdenadas.map((fecha, i) => (
+          <span key={fecha} className="flex items-center gap-1">
+            <span
+              className="inline-block h-3 w-3 rounded-full"
+              style={{ background: colorDelDia(i) }}
+            />
+            Día {i + 1} · {new Date(`${fecha}T00:00:00`).toLocaleDateString('es-GT', {
+              day: '2-digit',
+              month: '2-digit',
+            })}
           </span>
+        ))}
+        {tiendasRegion.length > 0 && (
           <span className="flex items-center gap-1">
             <span className="inline-block h-3 w-3 rounded bg-[#0092D2]" /> Tienda de la región
           </span>
-        </p>
-      )}
+        )}
+      </p>
     </div>
   )
 }

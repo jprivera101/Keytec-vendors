@@ -3,12 +3,14 @@ import { Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../lib/useAuth'
 import { Spinner } from '../../components/Spinner'
-import { obtenerSemanaActiva, obtenerVisitasConVentas } from '../../lib/api'
+import { obtenerSemanaActiva, obtenerVisitasConVentas, obtenerVentasEnvioDeSemana } from '../../lib/api'
 import { crearSemana, finalizarSemana } from '../../lib/api'
 import { formatMonto } from '../../lib/currency'
 import { IniciarSemanaModal } from './IniciarSemanaModal'
 import { FinalizarSemanaModal } from './FinalizarSemanaModal'
 import { NuevaVisitaModal } from './NuevaVisitaModal'
+import { NuevaGasolinaModal } from './NuevaGasolinaModal'
+import { NuevaVentaEnvioModal } from './NuevaVentaEnvioModal'
 import { IconBandera, IconRuta, IconTiendas } from '../../components/icons'
 
 export function PanelVendedor() {
@@ -19,6 +21,8 @@ export function PanelVendedor() {
   const [modalIniciar, setModalIniciar] = useState(false)
   const [modalFinalizar, setModalFinalizar] = useState(false)
   const [modalVisita, setModalVisita] = useState(false)
+  const [modalGasolina, setModalGasolina] = useState(false)
+  const [modalEnvio, setModalEnvio] = useState(false)
 
   const semanaQuery = useQuery({
     queryKey: ['semana-activa', userId],
@@ -33,10 +37,17 @@ export function PanelVendedor() {
     enabled: !!semana,
   })
 
-  const totalVentas = (visitasQuery.data ?? []).reduce(
-    (suma, v) => suma + v.sales.reduce((s, venta) => s + Number(venta.amount), 0),
-    0,
-  )
+  const ventasEnvioQuery = useQuery({
+    queryKey: ['ventas-envio', semana?.id],
+    queryFn: () => obtenerVentasEnvioDeSemana(semana!.id),
+    enabled: !!semana,
+  })
+
+  const totalVentas =
+    (visitasQuery.data ?? []).reduce(
+      (suma, v) => suma + v.sales.reduce((s, venta) => s + Number(venta.amount), 0),
+      0,
+    ) + (ventasEnvioQuery.data ?? []).reduce((suma, v) => suma + Number(v.amount), 0)
 
   async function manejarIniciarSemana(km: number, fotoPath: string) {
     await crearSemana(userId, km, fotoPath)
@@ -111,6 +122,15 @@ export function PanelVendedor() {
             <IconTiendas width={20} height={20} /> Registrar visita a tienda
           </button>
 
+          <div className="grid grid-cols-2 gap-3">
+            <button type="button" onClick={() => setModalEnvio(true)} className="btn-secondary py-3">
+              📦 Venta por envío
+            </button>
+            <button type="button" onClick={() => setModalGasolina(true)} className="btn-secondary py-3">
+              ⛽ Gasolina
+            </button>
+          </div>
+
           <button type="button" onClick={() => setModalFinalizar(true)} className="btn-secondary w-full py-3">
             <IconBandera width={18} height={18} /> Finalizar semana
           </button>
@@ -144,6 +164,34 @@ export function PanelVendedor() {
           onCreada={() => {
             setModalVisita(false)
             queryClient.invalidateQueries({ queryKey: ['visitas', semana.id] })
+          }}
+        />
+      )}
+
+      {semana && (
+        <NuevaGasolinaModal
+          abierto={modalGasolina}
+          weekId={semana.id}
+          userId={userId}
+          country={profile?.country}
+          onCerrar={() => setModalGasolina(false)}
+          onCreada={() => {
+            setModalGasolina(false)
+            queryClient.invalidateQueries({ queryKey: ['gasolina', semana.id] })
+          }}
+        />
+      )}
+
+      {semana && (
+        <NuevaVentaEnvioModal
+          abierto={modalEnvio}
+          weekId={semana.id}
+          userId={userId}
+          country={profile?.country}
+          onCerrar={() => setModalEnvio(false)}
+          onCreada={() => {
+            setModalEnvio(false)
+            queryClient.invalidateQueries({ queryKey: ['ventas-envio', semana.id] })
           }}
         />
       )}

@@ -84,6 +84,27 @@ export interface VisitWithSales extends Visit {
   sales: Sale[]
 }
 
+export interface GasolinaRegistro {
+  id: string
+  week_id: string
+  initial_tank_photo_path: string
+  final_tank_photo_path: string
+  receipt_photo_path: string
+  amount: number
+  created_at: string
+}
+
+/** Venta que no quedo ligada a ninguna tienda/ubicacion (p.ej. se vendio ya cerrada la
+ * semana y se registra al iniciar la siguiente). */
+export interface VentaEnvio {
+  id: string
+  week_id: string
+  client_name: string
+  amount: number
+  photo_path: string | null
+  created_at: string
+}
+
 export interface ResumenAdmin {
   vendedoresActivos: number
   rutasActivas: number

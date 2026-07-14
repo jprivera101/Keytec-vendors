@@ -1,6 +1,6 @@
 import { supabase } from './supabaseClient'
 
-export type BucketFotos = 'visit-photos' | 'sale-photos' | 'mileage-photos'
+export type BucketFotos = 'visit-photos' | 'sale-photos' | 'mileage-photos' | 'gasoline-photos'
 
 /** Sube una foto ya comprimida a la carpeta del usuario dentro del bucket indicado. */
 export async function subirFoto(bucket: BucketFotos, userId: string, archivo: Blob) {

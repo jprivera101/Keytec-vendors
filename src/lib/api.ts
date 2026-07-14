@@ -1,9 +1,11 @@
 import { supabase } from './supabaseClient'
 import type {
   CountryCode,
+  GasolinaRegistro,
   Profile,
   ResumenAdmin,
   Sale,
+  VentaEnvio,
   Visit,
   VisitWithSales,
   VendedorConRegion,
@@ -109,6 +111,53 @@ export async function obtenerVisitasConVentas(weekId: string): Promise<VisitWith
     .order('captured_at', { ascending: true })
   if (error) throw error
   return data as VisitWithSales[]
+}
+
+// Gasolina -------------------------------------------------------------
+
+export async function crearGasolina(input: {
+  week_id: string
+  initial_tank_photo_path: string
+  final_tank_photo_path: string
+  receipt_photo_path: string
+  amount: number
+}): Promise<GasolinaRegistro> {
+  const { data, error } = await supabase.from('gasoline_logs').insert(input).select('*').single()
+  if (error) throw error
+  return data
+}
+
+export async function obtenerGasolinaDeSemana(weekId: string): Promise<GasolinaRegistro[]> {
+  const { data, error } = await supabase
+    .from('gasoline_logs')
+    .select('*')
+    .eq('week_id', weekId)
+    .order('created_at', { ascending: true })
+  if (error) throw error
+  return data
+}
+
+// Ventas por envío (sin tienda/ubicación) ------------------------------
+
+export async function crearVentaEnvio(input: {
+  week_id: string
+  client_name: string
+  amount: number
+  photo_path: string | null
+}): Promise<VentaEnvio> {
+  const { data, error } = await supabase.from('shipment_sales').insert(input).select('*').single()
+  if (error) throw error
+  return data
+}
+
+export async function obtenerVentasEnvioDeSemana(weekId: string): Promise<VentaEnvio[]> {
+  const { data, error } = await supabase
+    .from('shipment_sales')
+    .select('*')
+    .eq('week_id', weekId)
+    .order('created_at', { ascending: true })
+  if (error) throw error
+  return data
 }
 
 // Administracion ---------------------------------------------------
@@ -238,6 +287,20 @@ export async function obtenerResumenAdmin(
       const pais = weekId ? paisPorWeekId.get(weekId) : undefined
       if (pais) ventasEnRutaPorPais[pais] = (ventasEnRutaPorPais[pais] ?? 0) + Number(venta.amount)
     }
+  }
+
+  // Las ventas por envío no tienen visita/tienda, pero si cuentan para el total de la ruta.
+  const { data: ventasEnvio, error: ventasEnvioError } = await supabase
+    .from('shipment_sales')
+    .select('amount, week_id')
+    .in('week_id', weekIds)
+  if (ventasEnvioError) throw ventasEnvioError
+
+  for (const venta of ventasEnvio ?? []) {
+    const nombre = nombrePorWeekId.get(venta.week_id) ?? 'Vendedor'
+    ventasPorNombre.set(nombre, (ventasPorNombre.get(nombre) ?? 0) + Number(venta.amount))
+    const pais = paisPorWeekId.get(venta.week_id)
+    if (pais) ventasEnRutaPorPais[pais] = (ventasEnRutaPorPais[pais] ?? 0) + Number(venta.amount)
   }
 
   const paisPorNombre = new Map<string, CountryCode | null>()
