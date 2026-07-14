@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { actualizarVendedor, establecerVendedorActivo, obtenerVendedores } from '../../lib/api'
+import { obtenerOperariosPorVendedor } from '../../lib/operarios'
 import { obtenerRegionesPorPais, crearRegion } from '../../lib/regiones'
 import { Spinner } from '../../components/Spinner'
 import { Modal } from '../../components/Modal'
@@ -18,6 +19,10 @@ export function VendedoresAdmin({ mostrarEncabezado = true }: { mostrarEncabezad
   const vendedoresQuery = useQuery({
     queryKey: ['vendedores', pais, region],
     queryFn: () => obtenerVendedores(pais, region),
+  })
+  const operariosPorVendedorQuery = useQuery({
+    queryKey: ['operarios-por-vendedor'],
+    queryFn: obtenerOperariosPorVendedor,
   })
 
   const [modalCrear, setModalCrear] = useState(false)
@@ -78,6 +83,7 @@ export function VendedoresAdmin({ mostrarEncabezado = true }: { mostrarEncabezad
               {pais === 'ALL' && <th className="px-4 py-3 font-medium">País</th>}
               <th className="px-4 py-3 font-medium">Región</th>
               <th className="px-4 py-3 font-medium">Teléfono</th>
+              <th className="px-4 py-3 font-medium">Operario</th>
               <th className="px-4 py-3 font-medium">Estado</th>
               <th className="px-4 py-3 font-medium">Ruta</th>
               <th className="px-4 py-3"></th>
@@ -98,6 +104,9 @@ export function VendedoresAdmin({ mostrarEncabezado = true }: { mostrarEncabezad
                 )}
                 <td className="px-4 py-3 text-slate-500">{vendedor.region_name ?? '—'}</td>
                 <td className="px-4 py-3 text-slate-500">{vendedor.phone || '—'}</td>
+                <td className="px-4 py-3 text-slate-500">
+                  {operariosPorVendedorQuery.data?.get(vendedor.id)?.join(', ') ?? '—'}
+                </td>
                 <td className="px-4 py-3">
                   <span
                     className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
@@ -146,7 +155,7 @@ export function VendedoresAdmin({ mostrarEncabezado = true }: { mostrarEncabezad
             ))}
             {vendedoresQuery.data?.length === 0 && (
               <tr>
-                <td colSpan={pais === 'ALL' ? 7 : 6} className="px-4 py-6 text-center text-sm text-slate-400">
+                <td colSpan={pais === 'ALL' ? 8 : 7} className="px-4 py-6 text-center text-sm text-slate-400">
                   No hay vendedores registrados todavía.
                 </td>
               </tr>

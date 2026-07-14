@@ -30,6 +30,34 @@ export async function obtenerOperarios(): Promise<OperarioConAsignados[]> {
   return operarios.map((o) => ({ ...o, asignados: conteo.get(o.id) ?? 0 }))
 }
 
+/** Para cada vendedor, el/los operario(s) que tiene asignados (por nombre) — usado en la
+ * columna "Operario" de Vendedores. Dos consultas (en vez de un embed anidado) porque
+ * "operario_asignaciones" tiene dos FKs a "profiles" (operario_id y salesman_id), lo que
+ * vuelve ambiguo cualquier embed directo de "profiles" sobre esa tabla. */
+export async function obtenerOperariosPorVendedor(): Promise<Map<string, string[]>> {
+  const { data: asignaciones, error } = await supabase
+    .from('operario_asignaciones')
+    .select('operario_id, salesman_id')
+  if (error) throw error
+  if (!asignaciones || asignaciones.length === 0) return new Map()
+
+  const operarioIds = Array.from(new Set(asignaciones.map((a) => a.operario_id)))
+  const { data: operarios, error: operariosError } = await supabase
+    .from('profiles')
+    .select('id, full_name')
+    .in('id', operarioIds)
+  if (operariosError) throw operariosError
+
+  const nombrePorOperarioId = new Map((operarios ?? []).map((o) => [o.id, o.full_name]))
+  const mapa = new Map<string, string[]>()
+  for (const asignacion of asignaciones) {
+    const nombre = nombrePorOperarioId.get(asignacion.operario_id) ?? 'Operario'
+    if (!mapa.has(asignacion.salesman_id)) mapa.set(asignacion.salesman_id, [])
+    mapa.get(asignacion.salesman_id)!.push(nombre)
+  }
+  return mapa
+}
+
 export async function obtenerAsignacionesDeOperario(operarioId: string): Promise<string[]> {
   const { data, error } = await supabase
     .from('operario_asignaciones')
