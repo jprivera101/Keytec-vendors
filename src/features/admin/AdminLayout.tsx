@@ -133,8 +133,8 @@ export function AdminLayout() {
   return (
     <div className="min-h-full bg-slate-50 lg:flex">
       <aside className="hidden w-64 shrink-0 flex-col bg-ink-700 text-white lg:flex">
-        <div className="p-4">
-          <img src="/keytec-sidebar.png" alt="KeyTec" className="w-full rounded-xl" />
+        <div className="px-6 py-6">
+          <img src="/keytec-sidebar.png" alt="KeyTec" className="h-8 w-auto" />
         </div>
 
         <div className="space-y-2 px-3 pb-4">
@@ -180,7 +180,7 @@ export function AdminLayout() {
 
       <div className="flex-1">
         <header className="flex items-center justify-between bg-ink-700 px-4 py-3 text-white lg:hidden">
-          <img src="/keytec-sidebar.png" alt="KeyTec" className="h-7 w-auto rounded-md" />
+          <img src="/keytec-sidebar.png" alt="KeyTec" className="h-6 w-auto" />
           <button onClick={cerrarSesion} className="text-sm text-white/70">
             Salir
           </button>
