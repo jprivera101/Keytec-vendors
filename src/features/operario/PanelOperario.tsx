@@ -23,8 +23,7 @@ export function PanelOperario() {
   const [vendedorFiltro, setVendedorFiltro] = useState<string | 'ALL'>('ALL')
   const [semanaFiltro, setSemanaFiltro] = useState<FiltroSemana>('activa')
   const [estadoFiltro, setEstadoFiltro] = useState<FiltroEstado>('pendiente')
-  const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null)
-  const [ventaAConfirmar, setVentaAConfirmar] = useState<VentaOperario | null>(null)
+  const [ventaSeleccionada, setVentaSeleccionada] = useState<VentaOperario | null>(null)
   const [procesando, setProcesando] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -51,10 +50,9 @@ export function PanelOperario() {
   }
 
   async function confirmarProcesada() {
-    if (!ventaAConfirmar) return
-    const venta = ventaAConfirmar
-    setVentaAConfirmar(null)
-    await marcar(venta, true)
+    if (!ventaSeleccionada) return
+    await marcar(ventaSeleccionada, true)
+    setVentaSeleccionada(null)
   }
 
   const ventas = (ventasQuery.data ?? []).filter((venta) => {
@@ -125,16 +123,19 @@ export function PanelOperario() {
       ) : (
         <div className="space-y-3">
           {ventas.map((venta) => (
-            <div key={venta.id} className="card flex items-center gap-3 p-3">
+            <button
+              key={venta.id}
+              type="button"
+              onClick={() => setVentaSeleccionada(venta)}
+              className="card flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-slate-50"
+            >
               {venta.photoPath ? (
-                <button type="button" onClick={() => setFotoAmpliada(venta.photoPath)} className="shrink-0">
-                  <FotoPrivada
-                    bucket="sale-photos"
-                    path={venta.photoPath}
-                    alt="Foto de la venta"
-                    className="h-14 w-14 rounded-lg object-cover"
-                  />
-                </button>
+                <FotoPrivada
+                  bucket="sale-photos"
+                  path={venta.photoPath}
+                  alt="Foto de la venta"
+                  className="h-14 w-14 shrink-0 rounded-lg object-cover"
+                />
               ) : (
                 <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-center text-[10px] text-slate-400">
                   Sin foto
@@ -157,63 +158,93 @@ export function PanelOperario() {
               <p className="shrink-0 text-right font-bold text-slate-900">
                 {formatMonto(venta.amount, venta.country)}
               </p>
-              {venta.processed ? (
+              {venta.processed && (
                 <span className="shrink-0 rounded-full bg-green-100 px-3 py-1.5 text-xs font-semibold text-green-700">
                   ✓ Procesada
                 </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setVentaAConfirmar(venta)}
-                  disabled={procesando === venta.id}
-                  className="btn-primary btn-sm shrink-0"
-                >
-                  {procesando === venta.id ? 'Guardando...' : 'Marcar procesada'}
-                </button>
               )}
-            </div>
+            </button>
           ))}
         </div>
       )}
 
-      <Modal titulo="Foto de la venta" abierto={!!fotoAmpliada} onCerrar={() => setFotoAmpliada(null)}>
-        {fotoAmpliada && (
-          <FotoPrivada
-            bucket="sale-photos"
-            path={fotoAmpliada}
-            alt="Foto de la venta"
-            className="max-h-[70vh] w-full rounded-lg object-contain"
-          />
-        )}
-      </Modal>
-
       <Modal
-        titulo="¿Confirmar procesado?"
-        abierto={!!ventaAConfirmar}
-        onCerrar={() => setVentaAConfirmar(null)}
+        titulo="Detalle de la venta"
+        abierto={!!ventaSeleccionada}
+        onCerrar={() => setVentaSeleccionada(null)}
       >
-        {ventaAConfirmar && (
+        {ventaSeleccionada && (
           <div className="space-y-4">
-            <p className="text-sm text-slate-600">
-              ¿Estás seguro que quieres marcar como procesada la venta de{' '}
-              <span className="font-semibold text-slate-900">
-                {ventaAConfirmar.storeName || 'Tienda sin nombre'}
-              </span>{' '}
-              por <span className="font-semibold text-slate-900">{formatMonto(ventaAConfirmar.amount, ventaAConfirmar.country)}</span>{' '}
-              ({ventaAConfirmar.salesmanName})? Ya no podrás deshacer esto desde aquí.
-            </p>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setVentaAConfirmar(null)}
-                className="btn-secondary btn-sm flex-1"
-              >
-                Cancelar
-              </button>
-              <button type="button" onClick={confirmarProcesada} className="btn-primary btn-sm flex-1">
-                Sí, procesar
-              </button>
+            {ventaSeleccionada.photoPath ? (
+              <FotoPrivada
+                bucket="sale-photos"
+                path={ventaSeleccionada.photoPath}
+                alt="Foto de la venta"
+                className="max-h-[50vh] w-full rounded-lg object-contain"
+              />
+            ) : (
+              <div className="flex h-40 items-center justify-center rounded-lg bg-slate-100 text-sm text-slate-400">
+                Sin foto
+              </div>
+            )}
+
+            <div className="space-y-1 text-sm">
+              <p className="flex justify-between">
+                <span className="text-slate-400">Tienda</span>
+                <span className="font-semibold text-slate-900">
+                  {ventaSeleccionada.storeName || 'Tienda sin nombre'}
+                </span>
+              </p>
+              <p className="flex justify-between">
+                <span className="text-slate-400">Vendedor</span>
+                <span className="font-semibold text-slate-900">{ventaSeleccionada.salesmanName}</span>
+              </p>
+              <p className="flex justify-between">
+                <span className="text-slate-400">Fecha</span>
+                <span className="font-semibold text-slate-900">
+                  {new Date(ventaSeleccionada.createdAt).toLocaleString('es-GT', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </span>
+              </p>
+              <p className="flex justify-between">
+                <span className="text-slate-400">Total</span>
+                <span className="font-bold text-slate-900">
+                  {formatMonto(ventaSeleccionada.amount, ventaSeleccionada.country)}
+                </span>
+              </p>
             </div>
+
+            {ventaSeleccionada.processed ? (
+              <span className="block rounded-full bg-green-100 px-3 py-2 text-center text-sm font-semibold text-green-700">
+                ✓ Ya está procesada
+              </span>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm text-slate-600">¿Marcar esta venta como procesada en el CRM?</p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setVentaSeleccionada(null)}
+                    className="btn-secondary btn-sm flex-1"
+                  >
+                    No procesar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmarProcesada}
+                    disabled={procesando === ventaSeleccionada.id}
+                    className="btn-primary btn-sm flex-1"
+                  >
+                    {procesando === ventaSeleccionada.id ? 'Guardando...' : 'Sí, procesar'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </Modal>
