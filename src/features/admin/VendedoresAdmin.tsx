@@ -5,6 +5,7 @@ import { actualizarVendedor, establecerVendedorActivo, obtenerVendedores } from 
 import { obtenerRegionesPorPais, crearRegion } from '../../lib/regiones'
 import { Spinner } from '../../components/Spinner'
 import { Modal } from '../../components/Modal'
+import { ModalRestablecerPassword } from '../../components/ModalRestablecerPassword'
 import { PageHeader } from '../../components/PageHeader'
 import { IconVendedores } from '../../components/icons'
 import { FormularioCrearVendedor } from './CrearVendedor'
@@ -21,6 +22,7 @@ export function VendedoresAdmin({ mostrarEncabezado = true }: { mostrarEncabezad
 
   const [modalCrear, setModalCrear] = useState(false)
   const [vendedorEditar, setVendedorEditar] = useState<VendedorConRegion | null>(null)
+  const [vendedorPassword, setVendedorPassword] = useState<VendedorConRegion | null>(null)
   const [cambiandoEstado, setCambiandoEstado] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -121,6 +123,13 @@ export function VendedoresAdmin({ mostrarEncabezado = true }: { mostrarEncabezad
                     </button>
                     <button
                       type="button"
+                      onClick={() => setVendedorPassword(vendedor)}
+                      className="btn-secondary btn-sm"
+                    >
+                      Restablecer contraseña
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => alternarActivo(vendedor)}
                       disabled={cambiandoEstado === vendedor.id}
                       className="btn-secondary btn-sm"
@@ -166,6 +175,8 @@ export function VendedoresAdmin({ mostrarEncabezado = true }: { mostrarEncabezad
           }}
         />
       )}
+
+      <ModalRestablecerPassword usuario={vendedorPassword} onCerrar={() => setVendedorPassword(null)} />
     </div>
   )
 }

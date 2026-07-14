@@ -59,6 +59,12 @@ function AjustarLimites({ posiciones }: { posiciones: [number, number][] }) {
   return null
 }
 
+interface Grupo {
+  color: string
+  etiqueta: string
+  visitas: VisitWithSales[]
+}
+
 interface Props {
   visitas: VisitWithSales[]
   /** Tiendas ya registradas en la region del vendedor, para comparar contra los pings de las
@@ -66,9 +72,13 @@ interface Props {
   tiendasRegion?: TiendaConLugar[]
   /** Determina si los montos se muestran en Quetzales o en Dólares. */
   country?: CountryCode | null
+  /** Agrupación alternativa para colorear el mapa (p. ej. una por vendedor en la vista
+   * general, en vez de por día). Si se pasa, reemplaza el agrupado por día por defecto tanto
+   * en las líneas/números como en la leyenda. */
+  grupos?: Grupo[]
 }
 
-export function MapaRuta({ visitas, tiendasRegion = [], country }: Props) {
+export function MapaRuta({ visitas, tiendasRegion = [], country, grupos }: Props) {
   const posicionesVisitas: [number, number][] = visitas.map((v) => [v.latitude, v.longitude])
   const posicionesTiendas: [number, number][] = tiendasRegion.map((t) => [t.latitude, t.longitude])
   const todasLasPosiciones = [...posicionesVisitas, ...posicionesTiendas]
@@ -83,15 +93,40 @@ export function MapaRuta({ visitas, tiendasRegion = [], country }: Props) {
 
   // Un "día" es una fecha calendario distinta dentro de las visitas de esta semana; se
   // numeran en orden cronológico (día 1 = la fecha más antigua) para pintar cada uno con
-  // su propio color de marca.
-  const fechasOrdenadas = Array.from(new Set(visitas.map((v) => v.captured_at.slice(0, 10)))).sort()
-  const indiceDia = (visita: VisitWithSales) => fechasOrdenadas.indexOf(visita.captured_at.slice(0, 10))
+  // su propio color de marca. Si se pasa "grupos" (vista general por vendedor), esa
+  // agrupación se usa en su lugar.
+  const fechasOrdenadas = grupos
+    ? []
+    : Array.from(new Set(visitas.map((v) => v.captured_at.slice(0, 10)))).sort()
 
   const visitasPorDia = new Map<string, VisitWithSales[]>()
   for (const visita of visitas) {
     const fecha = visita.captured_at.slice(0, 10)
     if (!visitasPorDia.has(fecha)) visitasPorDia.set(fecha, [])
     visitasPorDia.get(fecha)!.push(visita)
+  }
+
+  const gruposFinal: Grupo[] =
+    grupos ??
+    fechasOrdenadas.map((fecha, i) => ({
+      color: colorDelDia(i),
+      etiqueta: `Día ${i + 1} · ${new Date(`${fecha}T00:00:00`).toLocaleDateString('es-GT', {
+        day: '2-digit',
+        month: '2-digit',
+      })}`,
+      visitas: visitasPorDia.get(fecha)!,
+    }))
+
+  // Cada visita se numera dentro de su propio grupo (no globalmente), en orden cronológico:
+  // así cada vendedor/día tiene su propia secuencia 1, 2, 3... fácil de seguir en el mapa.
+  const colorPorVisitaId = new Map<string, string>()
+  const numeroPorVisitaId = new Map<string, number>()
+  for (const grupo of gruposFinal) {
+    const ordenadas = [...grupo.visitas].sort((a, b) => a.captured_at.localeCompare(b.captured_at))
+    ordenadas.forEach((visita, idx) => {
+      colorPorVisitaId.set(visita.id, grupo.color)
+      numeroPorVisitaId.set(visita.id, idx + 1)
+    })
   }
 
   return (
@@ -103,10 +138,13 @@ export function MapaRuta({ visitas, tiendasRegion = [], country }: Props) {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           <AjustarLimites posiciones={todasLasPosiciones} />
-          {fechasOrdenadas.map((fecha, i) => {
-            const puntos = visitasPorDia.get(fecha)!.map((v) => [v.latitude, v.longitude] as [number, number])
+          {gruposFinal.map((grupo) => {
+            const ordenadas = [...grupo.visitas].sort((a, b) => a.captured_at.localeCompare(b.captured_at))
+            const puntos = ordenadas.map((v) => [v.latitude, v.longitude] as [number, number])
             return (
-              puntos.length > 1 && <Polyline key={fecha} positions={puntos} color={colorDelDia(i)} weight={3} />
+              puntos.length > 1 && (
+                <Polyline key={grupo.etiqueta} positions={puntos} color={grupo.color} weight={3} />
+              )
             )
           })}
           {tiendasRegion.map((tienda) => (
@@ -140,13 +178,13 @@ export function MapaRuta({ visitas, tiendasRegion = [], country }: Props) {
               </Popup>
             </Marker>
           ))}
-          {visitas.map((visita, i) => {
+          {visitas.map((visita) => {
             const total = visita.sales.reduce((s, v) => s + Number(v.amount), 0)
             return (
               <Marker
                 key={visita.id}
                 position={[visita.latitude, visita.longitude]}
-                icon={iconoNumerado(i + 1, colorDelDia(indiceDia(visita)))}
+                icon={iconoNumerado(numeroPorVisitaId.get(visita.id) ?? 1, colorPorVisitaId.get(visita.id) ?? colorDelDia(0))}
               >
                 <Popup>
                   <div className="w-40">
@@ -156,6 +194,11 @@ export function MapaRuta({ visitas, tiendasRegion = [], country }: Props) {
                       alt="Foto de la tienda"
                       className="mb-2 h-24 w-full rounded object-cover"
                     />
+                    {grupos && (
+                      <p className="text-xs font-semibold text-slate-400">
+                        {grupos.find((g) => g.visitas.some((v) => v.id === visita.id))?.etiqueta}
+                      </p>
+                    )}
                     <p className="text-sm font-semibold">{visita.store_name || 'Tienda sin nombre'}</p>
                     <p className="text-xs text-slate-500">
                       {new Date(visita.captured_at).toLocaleString('es-GT')}
@@ -171,16 +214,10 @@ export function MapaRuta({ visitas, tiendasRegion = [], country }: Props) {
         </MapContainer>
       </div>
       <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-500">
-        {fechasOrdenadas.map((fecha, i) => (
-          <span key={fecha} className="flex items-center gap-1">
-            <span
-              className="inline-block h-3 w-3 rounded-full"
-              style={{ background: colorDelDia(i) }}
-            />
-            Día {i + 1} · {new Date(`${fecha}T00:00:00`).toLocaleDateString('es-GT', {
-              day: '2-digit',
-              month: '2-digit',
-            })}
+        {gruposFinal.map((grupo) => (
+          <span key={grupo.etiqueta} className="flex items-center gap-1">
+            <span className="inline-block h-3 w-3 rounded-full" style={{ background: grupo.color }} />
+            {grupo.etiqueta}
           </span>
         ))}
         {tiendasRegion.length > 0 && (

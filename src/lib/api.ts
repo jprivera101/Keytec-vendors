@@ -7,6 +7,7 @@ import type {
   Sale,
   VentaEnvio,
   Visit,
+  VisitaConVendedor,
   VisitWithSales,
   VendedorConRegion,
   Week,
@@ -113,6 +114,30 @@ export async function obtenerVisitasConVentas(weekId: string): Promise<VisitWith
   return data as VisitWithSales[]
 }
 
+/** Visitas de la semana ACTIVA de cada vendedor dado, para la vista general de Analítica
+ * (varios vendedores juntos en un solo mapa). Usa un inner join a "weeks" para poder filtrar
+ * por su estado y su vendedor directamente en la consulta. */
+export async function obtenerVisitasActivasDeVendedores(
+  vendedorIds: string[],
+): Promise<VisitaConVendedor[]> {
+  if (vendedorIds.length === 0) return []
+  const { data, error } = await supabase
+    .from('visits')
+    .select('*, sales(*), weeks!inner(status, salesman_id, profiles(full_name))')
+    .eq('weeks.status', 'active')
+    .in('weeks.salesman_id', vendedorIds)
+    .order('captured_at', { ascending: true })
+  if (error) throw error
+
+  return ((data ?? []) as unknown as Array<
+    VisitWithSales & { weeks: { salesman_id: string; profiles: { full_name: string } | null } }
+  >).map((fila) => ({
+    ...fila,
+    vendedorId: fila.weeks.salesman_id,
+    vendedorNombre: fila.weeks.profiles?.full_name ?? 'Vendedor',
+  }))
+}
+
 // Gasolina -------------------------------------------------------------
 
 export async function crearGasolina(input: {
@@ -210,6 +235,16 @@ export async function actualizarVendedor(
 export async function establecerVendedorActivo(salesmanId: string, active: boolean) {
   const { data, error } = await supabase.functions.invoke('set-salesman-active', {
     body: { salesman_id: salesmanId, active },
+  })
+  if (error) throw error
+  if (data?.error) throw new Error(data.error)
+}
+
+/** Cambia la contraseña de un vendedor, admin de país u operario; esto cierra su sesión
+ * en todos sus dispositivos automáticamente (Supabase revoca sus tokens al hacerlo). */
+export async function restablecerPassword(userId: string, newPassword: string) {
+  const { data, error } = await supabase.functions.invoke('reset-password', {
+    body: { user_id: userId, new_password: newPassword },
   })
   if (error) throw error
   if (data?.error) throw new Error(data.error)

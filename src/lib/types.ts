@@ -78,10 +78,20 @@ export interface Sale {
   amount: number
   photo_path: string | null
   created_at: string
+  processed: boolean
+  processed_at: string | null
+  processed_by: string | null
 }
 
 export interface VisitWithSales extends Visit {
   sales: Sale[]
+}
+
+/** Visita combinada con el vendedor que la registró — usada en la vista general de
+ * Analítica, donde se muestran varios vendedores juntos en un solo mapa. */
+export interface VisitaConVendedor extends VisitWithSales {
+  vendedorId: string
+  vendedorNombre: string
 }
 
 export interface GasolinaRegistro {

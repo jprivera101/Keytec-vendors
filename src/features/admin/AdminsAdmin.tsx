@@ -1,18 +1,39 @@
 import { useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { obtenerAdmins } from '../../lib/api'
+import { obtenerAdmins, establecerVendedorActivo } from '../../lib/api'
 import { supabase } from '../../lib/supabaseClient'
 import { Spinner } from '../../components/Spinner'
 import { Modal } from '../../components/Modal'
+import { ModalRestablecerPassword } from '../../components/ModalRestablecerPassword'
 import { PageHeader } from '../../components/PageHeader'
 import { IconVendedores } from '../../components/icons'
 import { NOMBRE_PAIS } from './AdminLayout'
-import type { CountryCode } from '../../lib/types'
+import type { CountryCode, Profile } from '../../lib/types'
 
 export function AdminsAdmin({ mostrarEncabezado = true }: { mostrarEncabezado?: boolean }) {
   const queryClient = useQueryClient()
   const adminsQuery = useQuery({ queryKey: ['admins'], queryFn: obtenerAdmins })
   const [modalCrear, setModalCrear] = useState(false)
+  const [adminPassword, setAdminPassword] = useState<Profile | null>(null)
+  const [cambiandoEstado, setCambiandoEstado] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  function refrescar() {
+    queryClient.invalidateQueries({ queryKey: ['admins'] })
+  }
+
+  async function alternarActivo(admin: Profile) {
+    setError(null)
+    setCambiandoEstado(admin.id)
+    try {
+      await establecerVendedorActivo(admin.id, !admin.active)
+      refrescar()
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setCambiandoEstado(null)
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -36,6 +57,8 @@ export function AdminsAdmin({ mostrarEncabezado = true }: { mostrarEncabezado?: 
         </div>
       )}
 
+      {error && <p className="text-sm text-red-600">{error}</p>}
+
       <div className="card overflow-hidden">
         {adminsQuery.isLoading && <Spinner />}
         <table className="w-full text-left text-sm">
@@ -44,21 +67,55 @@ export function AdminsAdmin({ mostrarEncabezado = true }: { mostrarEncabezado?: 
               <th className="px-4 py-3 font-medium">Nombre</th>
               <th className="px-4 py-3 font-medium">País</th>
               <th className="px-4 py-3 font-medium">Teléfono</th>
+              <th className="px-4 py-3 font-medium">Estado</th>
+              <th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {adminsQuery.data?.map((admin) => (
-              <tr key={admin.id}>
+              <tr key={admin.id} className={admin.active ? '' : 'opacity-50'}>
                 <td className="px-4 py-3 font-medium text-slate-900">{admin.full_name}</td>
                 <td className="px-4 py-3 text-slate-500">
                   {admin.country ? NOMBRE_PAIS[admin.country] : '—'}
                 </td>
                 <td className="px-4 py-3 text-slate-500">{admin.phone || '—'}</td>
+                <td className="px-4 py-3">
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                      admin.active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'
+                    }`}
+                  >
+                    {admin.active ? 'Activo' : 'Desactivado'}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAdminPassword(admin)}
+                      className="btn-secondary btn-sm"
+                    >
+                      Restablecer contraseña
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => alternarActivo(admin)}
+                      disabled={cambiandoEstado === admin.id}
+                      className="btn-secondary btn-sm"
+                    >
+                      {cambiandoEstado === admin.id
+                        ? 'Guardando...'
+                        : admin.active
+                          ? 'Desactivar'
+                          : 'Reactivar'}
+                    </button>
+                  </div>
+                </td>
               </tr>
             ))}
             {adminsQuery.data?.length === 0 && (
               <tr>
-                <td colSpan={3} className="px-4 py-6 text-center text-sm text-slate-400">
+                <td colSpan={5} className="px-4 py-6 text-center text-sm text-slate-400">
                   No hay admins de país registrados todavía.
                 </td>
               </tr>
@@ -70,10 +127,12 @@ export function AdminsAdmin({ mostrarEncabezado = true }: { mostrarEncabezado?: 
       <Modal titulo="Nuevo admin de país" abierto={modalCrear} onCerrar={() => setModalCrear(false)}>
         <FormularioCrearAdmin
           onCreado={() => {
-            queryClient.invalidateQueries({ queryKey: ['admins'] })
+            refrescar()
           }}
         />
       </Modal>
+
+      <ModalRestablecerPassword usuario={adminPassword} onCerrar={() => setAdminPassword(null)} />
     </div>
   )
 }

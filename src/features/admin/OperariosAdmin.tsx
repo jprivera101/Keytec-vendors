@@ -10,6 +10,7 @@ import { obtenerVendedores, establecerVendedorActivo } from '../../lib/api'
 import { supabase } from '../../lib/supabaseClient'
 import { Spinner } from '../../components/Spinner'
 import { Modal } from '../../components/Modal'
+import { ModalRestablecerPassword } from '../../components/ModalRestablecerPassword'
 import { PageHeader } from '../../components/PageHeader'
 import { IconProcesar } from '../../components/icons'
 import { SelectorVendedoresMultiple } from '../../components/SelectorVendedoresMultiple'
@@ -19,6 +20,7 @@ export function OperariosAdmin({ mostrarEncabezado = true }: { mostrarEncabezado
   const operariosQuery = useQuery({ queryKey: ['operarios'], queryFn: obtenerOperarios })
   const [modalCrear, setModalCrear] = useState(false)
   const [operarioEditar, setOperarioEditar] = useState<OperarioConAsignados | null>(null)
+  const [operarioPassword, setOperarioPassword] = useState<OperarioConAsignados | null>(null)
   const [cambiandoEstado, setCambiandoEstado] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -101,6 +103,13 @@ export function OperariosAdmin({ mostrarEncabezado = true }: { mostrarEncabezado
                     </button>
                     <button
                       type="button"
+                      onClick={() => setOperarioPassword(operario)}
+                      className="btn-secondary btn-sm"
+                    >
+                      Restablecer contraseña
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => alternarActivo(operario)}
                       disabled={cambiandoEstado === operario.id}
                       className="btn-secondary btn-sm"
@@ -144,6 +153,8 @@ export function OperariosAdmin({ mostrarEncabezado = true }: { mostrarEncabezado
           }}
         />
       )}
+
+      <ModalRestablecerPassword usuario={operarioPassword} onCerrar={() => setOperarioPassword(null)} />
     </div>
   )
 }

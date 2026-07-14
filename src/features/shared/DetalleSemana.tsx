@@ -62,12 +62,16 @@ export function DetalleSemana({
     visitas.reduce((suma, v) => suma + v.sales.reduce((s, venta) => s + Number(venta.amount), 0), 0) +
     ventasEnvio.reduce((suma, v) => suma + Number(v.amount), 0)
   const totalGasolina = gasolina.reduce((suma, g) => suma + Number(g.amount), 0)
+  const ventasSinProcesar = visitas.reduce(
+    (suma, v) => suma + v.sales.filter((venta) => !venta.processed).length,
+    0,
+  )
   const kmRecorridos =
     semana.end_mileage_km != null ? semana.end_mileage_km - semana.start_mileage_km : null
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <StatCard
           etiqueta="Estado"
           valor={semana.status === 'active' ? 'Activa' : 'Completada'}
@@ -80,6 +84,7 @@ export function DetalleSemana({
           valor={formatMonto(totalGasolina, country)}
           onClick={gasolina.length > 0 ? () => setGasolinaAbierta(true) : undefined}
         />
+        <StatCard etiqueta="Ventas sin procesar" valor={String(ventasSinProcesar)} resaltar={ventasSinProcesar > 0} />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -131,28 +136,34 @@ function StatCard({
   etiqueta,
   valor,
   onClick,
+  resaltar = false,
 }: {
   etiqueta: string
   valor: string
   onClick?: () => void
+  resaltar?: boolean
 }) {
   const contenido = (
     <>
-      <p className="text-xs text-slate-400">{etiqueta}</p>
-      <p className="mt-1 text-sm font-bold text-slate-900">{valor}</p>
+      <p className={`text-xs ${resaltar ? 'text-amber-600' : 'text-slate-400'}`}>{etiqueta}</p>
+      <p className={`mt-1 text-sm font-bold ${resaltar ? 'text-amber-700' : 'text-slate-900'}`}>{valor}</p>
       {onClick && <p className="mt-0.5 text-[10px] font-medium text-brand-700">Ver detalle →</p>}
     </>
   )
 
   if (onClick) {
     return (
-      <button type="button" onClick={onClick} className="card p-3 text-center transition-colors hover:bg-slate-50">
+      <button
+        type="button"
+        onClick={onClick}
+        className={`card p-3 text-center transition-colors hover:bg-slate-50 ${resaltar ? 'bg-amber-50' : ''}`}
+      >
         {contenido}
       </button>
     )
   }
 
-  return <div className="card p-3 text-center">{contenido}</div>
+  return <div className={`card p-3 text-center ${resaltar ? 'bg-amber-50' : ''}`}>{contenido}</div>
 }
 
 function FotoKilometraje({
