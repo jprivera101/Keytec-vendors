@@ -43,14 +43,16 @@ export function PanelOperario() {
     }
   }, [ventaSeleccionada?.id])
 
-  function tocarBotonProcesar() {
+  function tocarBotonAccion(marcarComoProcesada: boolean) {
     if (!confirmando) {
       setConfirmando(true)
       timeoutArmado.current = setTimeout(() => setConfirmando(false), 4000)
       return
     }
     if (timeoutArmado.current) clearTimeout(timeoutArmado.current)
-    confirmarProcesada()
+    setConfirmando(false)
+    if (!ventaSeleccionada) return
+    marcar(ventaSeleccionada, marcarComoProcesada).then(() => setVentaSeleccionada(null))
   }
 
   const vendedoresQuery = useQuery({
@@ -73,12 +75,6 @@ export function PanelOperario() {
     } finally {
       setProcesando(null)
     }
-  }
-
-  async function confirmarProcesada() {
-    if (!ventaSeleccionada) return
-    await marcar(ventaSeleccionada, true)
-    setVentaSeleccionada(null)
   }
 
   const ventas = (ventasQuery.data ?? []).filter((venta) => {
@@ -331,9 +327,30 @@ export function PanelOperario() {
             </div>
 
             {ventaSeleccionada.processed ? (
-              <span className="block rounded-full bg-green-100 px-3 py-2 text-center text-sm font-semibold text-green-700">
-                ✓ Ya está procesada
-              </span>
+              <div className="space-y-2">
+                <span className="block rounded-full bg-green-100 px-3 py-2 text-center text-sm font-semibold text-green-700">
+                  ✓ Ya está procesada
+                </span>
+                <p className="text-xs text-slate-400">
+                  {confirmando
+                    ? 'Confirma de nuevo para revertirla a pendiente — se cancela solo si no tocas de nuevo.'
+                    : '¿Se marcó por error? Puedes devolverla a pendiente.'}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => tocarBotonAccion(false)}
+                  disabled={procesando === ventaSeleccionada.id}
+                  className={`btn-secondary btn-sm w-full ${
+                    confirmando ? 'border-amber-400 bg-amber-50 text-amber-700' : ''
+                  }`}
+                >
+                  {procesando === ventaSeleccionada.id
+                    ? 'Guardando...'
+                    : confirmando
+                      ? 'Toca de nuevo para revertir'
+                      : 'Revertir a pendiente'}
+                </button>
+              </div>
             ) : (
               <div className="space-y-2">
                 <p className="text-sm text-slate-600">
@@ -351,7 +368,7 @@ export function PanelOperario() {
                   </button>
                   <button
                     type="button"
-                    onClick={tocarBotonProcesar}
+                    onClick={() => tocarBotonAccion(true)}
                     disabled={procesando === ventaSeleccionada.id}
                     className={`btn-primary btn-sm flex-1 ${
                       confirmando ? 'bg-amber-500 shadow-amber-500/25 hover:bg-amber-600' : ''
