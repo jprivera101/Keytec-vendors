@@ -11,6 +11,7 @@ import { formatMonto } from '../../lib/currency'
 import { Spinner } from '../../components/Spinner'
 import { Modal } from '../../components/Modal'
 import { FotoPrivada } from '../../components/FotoPrivada'
+import { VisorFotoZoom } from '../../components/VisorFotoZoom'
 import { PageHeader } from '../../components/PageHeader'
 import { IconProcesar } from '../../components/icons'
 
@@ -24,6 +25,7 @@ export function PanelOperario() {
   const [semanaFiltro, setSemanaFiltro] = useState<FiltroSemana>('activa')
   const [estadoFiltro, setEstadoFiltro] = useState<FiltroEstado>('pendiente')
   const [ventaSeleccionada, setVentaSeleccionada] = useState<VentaOperario | null>(null)
+  const [fotoZoomAbierta, setFotoZoomAbierta] = useState(false)
   const [procesando, setProcesando] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -252,12 +254,21 @@ export function PanelOperario() {
         {ventaSeleccionada && (
           <div className="space-y-4">
             {ventaSeleccionada.photoPath ? (
-              <FotoPrivada
-                bucket="sale-photos"
-                path={ventaSeleccionada.photoPath}
-                alt="Foto de la venta"
-                className="max-h-[50vh] w-full rounded-lg object-contain"
-              />
+              <button
+                type="button"
+                onClick={() => setFotoZoomAbierta(true)}
+                className="block w-full"
+              >
+                <FotoPrivada
+                  bucket="sale-photos"
+                  path={ventaSeleccionada.photoPath}
+                  alt="Foto de la venta"
+                  className="max-h-[50vh] w-full rounded-lg object-contain"
+                />
+                <span className="mt-1 block text-center text-xs font-medium text-brand-700">
+                  Toca para hacer zoom →
+                </span>
+              </button>
             ) : (
               <div className="flex h-40 items-center justify-center rounded-lg bg-slate-100 text-sm text-slate-400">
                 Sin foto
@@ -324,6 +335,14 @@ export function PanelOperario() {
           </div>
         )}
       </Modal>
+
+      <VisorFotoZoom
+        bucket="sale-photos"
+        path={ventaSeleccionada?.photoPath ?? null}
+        alt="Foto de la venta"
+        abierto={fotoZoomAbierta}
+        onCerrar={() => setFotoZoomAbierta(false)}
+      />
     </div>
   )
 }
