@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../lib/useAuth'
 import {
@@ -28,31 +28,17 @@ export function PanelOperario() {
   const [fotoZoomAbierta, setFotoZoomAbierta] = useState(false)
   const [procesando, setProcesando] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  // Segundo check real: el botón "Sí, procesar" no procesa al primer toque, se "arma" y hay
-  // que tocarlo de nuevo dentro de unos segundos. Antes el botón de confirmar aparecía ya
-  // visible apenas se abría el detalle, así que un toque rápido/accidental bastaba para
-  // procesar una venta sin querer (le pasó con una venta de Ulises) — esto obliga a una
-  // segunda acción deliberada, separada en el tiempo, antes de que haga algo.
-  const [confirmando, setConfirmando] = useState(false)
-  const timeoutArmado = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Pop-up de "¿estás seguro?" aparte, no un botón que cambia de texto: así el corte es
+  // inconfundible en vez de depender de que alguien note que el mismo botón se armó. `true`
+  // = confirmando marcar como procesada, `false` = confirmando revertir a pendiente, `null` =
+  // cerrado. Evita que una venta se procese sin querer (le pasó con una de Ulises).
+  const [accionAConfirmar, setAccionAConfirmar] = useState<boolean | null>(null)
 
-  useEffect(() => {
-    setConfirmando(false)
-    return () => {
-      if (timeoutArmado.current) clearTimeout(timeoutArmado.current)
-    }
-  }, [ventaSeleccionada?.id])
-
-  function tocarBotonAccion(marcarComoProcesada: boolean) {
-    if (!confirmando) {
-      setConfirmando(true)
-      timeoutArmado.current = setTimeout(() => setConfirmando(false), 4000)
-      return
-    }
-    if (timeoutArmado.current) clearTimeout(timeoutArmado.current)
-    setConfirmando(false)
-    if (!ventaSeleccionada) return
-    marcar(ventaSeleccionada, marcarComoProcesada).then(() => setVentaSeleccionada(null))
+  async function confirmarAccion() {
+    if (!ventaSeleccionada || accionAConfirmar === null) return
+    await marcar(ventaSeleccionada, accionAConfirmar)
+    setAccionAConfirmar(null)
+    setVentaSeleccionada(null)
   }
 
   const vendedoresQuery = useQuery({
@@ -331,33 +317,14 @@ export function PanelOperario() {
                 <span className="block rounded-full bg-green-100 px-3 py-2 text-center text-sm font-semibold text-green-700">
                   ✓ Ya está procesada
                 </span>
-                <p className="text-xs text-slate-400">
-                  {confirmando
-                    ? 'Confirma de nuevo para revertirla a pendiente — se cancela solo si no tocas de nuevo.'
-                    : '¿Se marcó por error? Puedes devolverla a pendiente.'}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => tocarBotonAccion(false)}
-                  disabled={procesando === ventaSeleccionada.id}
-                  className={`btn-secondary btn-sm w-full ${
-                    confirmando ? 'border-amber-400 bg-amber-50 text-amber-700' : ''
-                  }`}
-                >
-                  {procesando === ventaSeleccionada.id
-                    ? 'Guardando...'
-                    : confirmando
-                      ? 'Toca de nuevo para revertir'
-                      : 'Revertir a pendiente'}
+                <p className="text-xs text-slate-400">¿Se marcó por error? Puedes devolverla a pendiente.</p>
+                <button type="button" onClick={() => setAccionAConfirmar(false)} className="btn-secondary btn-sm w-full">
+                  Revertir a pendiente
                 </button>
               </div>
             ) : (
               <div className="space-y-2">
-                <p className="text-sm text-slate-600">
-                  {confirmando
-                    ? 'Confirma de nuevo para procesar esta venta — se cancela solo si no tocas de nuevo.'
-                    : '¿Marcar esta venta como procesada en el CRM?'}
-                </p>
+                <p className="text-sm text-slate-600">¿Marcar esta venta como procesada en el CRM?</p>
                 <div className="flex gap-2">
                   <button
                     type="button"
@@ -368,21 +335,47 @@ export function PanelOperario() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => tocarBotonAccion(true)}
-                    disabled={procesando === ventaSeleccionada.id}
-                    className={`btn-primary btn-sm flex-1 ${
-                      confirmando ? 'bg-amber-500 shadow-amber-500/25 hover:bg-amber-600' : ''
-                    }`}
+                    onClick={() => setAccionAConfirmar(true)}
+                    className="btn-primary btn-sm flex-1"
                   >
-                    {procesando === ventaSeleccionada.id
-                      ? 'Guardando...'
-                      : confirmando
-                        ? 'Toca de nuevo para confirmar'
-                        : 'Sí, procesar'}
+                    Sí, procesar
                   </button>
                 </div>
               </div>
             )}
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        titulo="¿Estás seguro?"
+        abierto={accionAConfirmar !== null}
+        onCerrar={() => setAccionAConfirmar(null)}
+      >
+        {ventaSeleccionada && accionAConfirmar !== null && (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              {accionAConfirmar
+                ? `¿Confirmas que la venta de ${ventaSeleccionada.storeName || 'esta tienda'} por ${formatMonto(ventaSeleccionada.amount, ventaSeleccionada.country)} quedó procesada en el CRM?`
+                : `¿Confirmas que quieres devolver a pendiente la venta de ${ventaSeleccionada.storeName || 'esta tienda'}?`}
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setAccionAConfirmar(null)}
+                className="btn-secondary btn-sm flex-1"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmarAccion}
+                disabled={procesando === ventaSeleccionada.id}
+                className="btn-primary btn-sm flex-1"
+              >
+                {procesando === ventaSeleccionada.id ? 'Guardando...' : 'Sí, confirmar'}
+              </button>
+            </div>
           </div>
         )}
       </Modal>
