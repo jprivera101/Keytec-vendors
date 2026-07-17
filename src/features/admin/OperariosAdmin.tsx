@@ -96,7 +96,7 @@ export function OperariosAdmin({ mostrarEncabezado = true }: { mostrarEncabezado
                   </span>
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <div className="flex flex-wrap justify-end gap-2">
+                  <div className="flex items-stretch justify-end gap-2">
                     <button
                       type="button"
                       onClick={() => setOperarioEditar(operario)}
