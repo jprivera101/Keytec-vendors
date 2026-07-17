@@ -14,5 +14,6 @@ export const CODIGO_MONEDA: Record<CountryCode, string> = {
 
 export function formatMonto(amount: number, country?: CountryCode | null): string {
   const simbolo = country ? SIMBOLO_MONEDA[country] : 'Q'
-  return `${simbolo}${amount.toFixed(2)}`
+  const numero = amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return `${simbolo}${numero}`
 }

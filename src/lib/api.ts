@@ -584,10 +584,29 @@ export async function obtenerComparativoSemanal(
     .sort((a, b) => a.nombre.localeCompare(b.nombre))
 }
 
+/** Recalcula (en el servidor, vía SQL) las métricas mensuales de todos los vendedores para un
+ * año/mes específico y las guarda en monthly_metrics. Idempotente — se puede llamar cada vez
+ * que se abre la vista mensual sin costo real una vez que el mes ya está cerrado. */
+export async function recalcularMetricasMensuales(anio: number, mes: number): Promise<void> {
+  const { error } = await supabase.rpc('recalcular_metricas_mensuales', { p_anio: anio, p_mes: mes })
+  if (error) throw error
+}
+
+interface FilaMetricaMensual {
+  salesman_id: string
+  year: number
+  month: number
+  km_recorridos: number | null
+  total_visitas: number
+  total_ventas: number
+}
+
 /** Vendedores activos (sin importar si tienen una semana activa ahora mismo) con sus
- * métricas acumuladas del mes calendario actual vs. el mes pasado. El kilometraje de un mes
- * solo suma las semanas ya finalizadas de ese mes (una semana activa sin kilometraje final
- * no se puede sumar todavía); si ninguna semana del mes está finalizada, queda en null. */
+ * métricas acumuladas del mes calendario actual vs. el mes pasado, leídas de la tabla
+ * monthly_metrics (pre-calculada) en vez de re-sumar visitas/ventas sueltas en el cliente.
+ * Antes de leer, refresca el mes actual y el pasado — barato una vez que el mes ya cerró,
+ * porque nadie puede agregarle más semanas retroactivamente. El kilometraje de un mes solo
+ * cuenta semanas ya finalizadas; si ninguna lo está, queda en null (no en cero). */
 export async function obtenerComparativoMensual(
   pais: CountryCode | 'ALL' = 'ALL',
   region: string | 'ALL' = 'ALL',
@@ -597,51 +616,45 @@ export async function obtenerComparativoMensual(
   const vendedorIds = vendedores.map((v) => v.id)
 
   const ahora = new Date()
-  const inicioMesActual = fechaLocalISO(new Date(ahora.getFullYear(), ahora.getMonth(), 1))
-  const inicioMesSiguiente = fechaLocalISO(new Date(ahora.getFullYear(), ahora.getMonth() + 1, 1))
-  const inicioMesPasado = fechaLocalISO(new Date(ahora.getFullYear(), ahora.getMonth() - 1, 1))
+  const anioActual = ahora.getFullYear()
+  const mesActual = ahora.getMonth() + 1
+  const mesPasadoFecha = new Date(ahora.getFullYear(), ahora.getMonth() - 1, 1)
+  const anioPasado = mesPasadoFecha.getFullYear()
+  const mesPasado = mesPasadoFecha.getMonth() + 1
 
-  const { data: semanasDelPeriodo, error } = await supabase
-    .from('weeks')
-    .select('id, salesman_id, start_date, start_mileage_km, end_mileage_km')
+  await Promise.all([
+    recalcularMetricasMensuales(anioActual, mesActual),
+    recalcularMetricasMensuales(anioPasado, mesPasado),
+  ])
+
+  const { data, error } = await supabase
+    .from('monthly_metrics')
+    .select('salesman_id, year, month, km_recorridos, total_visitas, total_ventas')
     .in('salesman_id', vendedorIds)
-    .gte('start_date', inicioMesPasado)
-    .lt('start_date', inicioMesSiguiente)
+    .or(`and(year.eq.${anioActual},month.eq.${mesActual}),and(year.eq.${anioPasado},month.eq.${mesPasado})`)
   if (error) throw error
 
-  const semanas = (semanasDelPeriodo ?? []) as FilaSemana[]
-  const metricas = await metricasPorSemana(semanas.map((s) => s.id))
+  const porVendedorYMes = new Map<string, FilaMetricaMensual>()
+  for (const fila of (data ?? []) as FilaMetricaMensual[]) {
+    porVendedorYMes.set(`${fila.salesman_id}-${fila.year}-${fila.month}`, fila)
+  }
 
-  function acumular(delVendedor: FilaSemana[]): MetricasPeriodo | null {
-    if (delVendedor.length === 0) return null
-    let km = 0
-    let huboSemanaFinalizada = false
-    let visitas = 0
-    let ventas = 0
-    for (const semana of delVendedor) {
-      if (semana.end_mileage_km != null) {
-        km += semana.end_mileage_km - semana.start_mileage_km
-        huboSemanaFinalizada = true
-      }
-      const m = metricas.get(semana.id)
-      visitas += m?.visitas ?? 0
-      ventas += m?.ventas ?? 0
+  function aMetricas(fila?: FilaMetricaMensual): MetricasPeriodo | null {
+    if (!fila) return null
+    return {
+      kmRecorridos: fila.km_recorridos,
+      totalVisitas: fila.total_visitas,
+      totalVentas: Number(fila.total_ventas),
     }
-    return { kmRecorridos: huboSemanaFinalizada ? km : null, totalVisitas: visitas, totalVentas: ventas }
   }
 
   return vendedores
-    .map((vendedor) => {
-      const semanasVendedor = semanas.filter((s) => s.salesman_id === vendedor.id)
-      const delMesActual = semanasVendedor.filter((s) => s.start_date >= inicioMesActual)
-      const delMesPasado = semanasVendedor.filter((s) => s.start_date < inicioMesActual)
-      return {
-        vendedorId: vendedor.id,
-        nombre: vendedor.full_name,
-        country: vendedor.country,
-        actual: acumular(delMesActual),
-        anterior: acumular(delMesPasado),
-      }
-    })
+    .map((vendedor) => ({
+      vendedorId: vendedor.id,
+      nombre: vendedor.full_name,
+      country: vendedor.country,
+      actual: aMetricas(porVendedorYMes.get(`${vendedor.id}-${anioActual}-${mesActual}`)),
+      anterior: aMetricas(porVendedorYMes.get(`${vendedor.id}-${anioPasado}-${mesPasado}`)),
+    }))
     .sort((a, b) => a.nombre.localeCompare(b.nombre))
 }
