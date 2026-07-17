@@ -9,9 +9,20 @@ const ALLOWED_ORIGINS = [
   "http://localhost:4173",
 ];
 
+// Cada "vercel --prod" genera ADEMAS una URL unica propia (p.ej.
+// eurocell-app-ventas-i7fkwtp28-ph19.vercel.app) antes de alias-earse a la de arriba; si
+// alguien prueba la app desde una de esas URLs, el origen no coincide con ninguna de la
+// lista exacta y el CORS bloquea la respuesta real (aunque la funcion sí corrió). Por eso
+// tambien se acepta cualquier subdominio *-ph19.vercel.app de este mismo proyecto.
+const PATRON_ORIGEN_VERCEL = /^https:\/\/eurocell-app-ventas-[a-z0-9]+-ph19\.vercel\.app$/;
+
+function esOrigenPermitido(origin: string): boolean {
+  return ALLOWED_ORIGINS.includes(origin) || PATRON_ORIGEN_VERCEL.test(origin);
+}
+
 export function corsHeadersFor(req: Request): Record<string, string> {
   const origin = req.headers.get("Origin") ?? "";
-  const allowOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  const allowOrigin = esOrigenPermitido(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
     "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",

@@ -142,7 +142,6 @@ export function AdminsAdmin({ mostrarEncabezado = true }: { mostrarEncabezado?: 
 function FormularioCrearAdmin({ onCreado }: { onCreado: () => void }) {
   const [fullName, setFullName] = useState('')
   const [username, setUsername] = useState('')
-  const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
   const [country, setCountry] = useState<CountryCode | ''>('')
@@ -165,7 +164,7 @@ function FormularioCrearAdmin({ onCreado }: { onCreado: () => void }) {
     setEnviando(true)
     try {
       const { data, error } = await supabase.functions.invoke('create-admin', {
-        body: { email, password, full_name: fullName, username, phone: phone || undefined, country },
+        body: { password, full_name: fullName, username, phone: phone || undefined, country },
       })
       if (error) throw error
       if (data?.error) throw new Error(data.error)
@@ -173,7 +172,6 @@ function FormularioCrearAdmin({ onCreado }: { onCreado: () => void }) {
       setExito(`Admin "${fullName}" creado. Comparte con él su usuario (${username}) y contraseña.`)
       setFullName('')
       setUsername('')
-      setEmail('')
       setPhone('')
       setPassword('')
       setCountry('')
@@ -205,15 +203,6 @@ function FormularioCrearAdmin({ onCreado }: { onCreado: () => void }) {
           placeholder="Ej. jperez"
           className="input-field"
           autoCapitalize="none"
-        />
-      </div>
-      <div>
-        <label className="mb-1 block text-sm font-medium text-slate-700">Correo (opcional)</label>
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="input-field"
         />
       </div>
       <div>

@@ -164,7 +164,6 @@ export function OperariosAdmin({ mostrarEncabezado = true }: { mostrarEncabezado
 function FormularioCrearOperario({ onCreado }: { onCreado: () => void }) {
   const [fullName, setFullName] = useState('')
   const [username, setUsername] = useState('')
-  const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
   const [seleccionados, setSeleccionados] = useState<string[]>([])
@@ -190,7 +189,6 @@ function FormularioCrearOperario({ onCreado }: { onCreado: () => void }) {
     try {
       const { data, error } = await supabase.functions.invoke('create-operario', {
         body: {
-          email,
           password,
           full_name: fullName,
           username,
@@ -204,7 +202,6 @@ function FormularioCrearOperario({ onCreado }: { onCreado: () => void }) {
       setExito(`Operario "${fullName}" creado. Comparte con él su usuario (${username}) y contraseña.`)
       setFullName('')
       setUsername('')
-      setEmail('')
       setPhone('')
       setPassword('')
       setSeleccionados([])
@@ -231,15 +228,6 @@ function FormularioCrearOperario({ onCreado }: { onCreado: () => void }) {
           placeholder="Ej. jperez"
           className="input-field"
           autoCapitalize="none"
-        />
-      </div>
-      <div>
-        <label className="mb-1 block text-sm font-medium text-slate-700">Correo (opcional)</label>
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="input-field"
         />
       </div>
       <div>

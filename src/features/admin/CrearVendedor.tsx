@@ -17,7 +17,6 @@ interface Props {
 export function FormularioCrearVendedor({ onCreado, mostrarSelectorPais, paisPredeterminado }: Props) {
   const [fullName, setFullName] = useState('')
   const [username, setUsername] = useState('')
-  const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [kmPerGallon, setKmPerGallon] = useState('')
   const [password, setPassword] = useState('')
@@ -67,7 +66,6 @@ export function FormularioCrearVendedor({ onCreado, mostrarSelectorPais, paisPre
 
       const { data, error } = await supabase.functions.invoke('create-salesman', {
         body: {
-          email,
           password,
           full_name: fullName,
           username,
@@ -83,7 +81,6 @@ export function FormularioCrearVendedor({ onCreado, mostrarSelectorPais, paisPre
       setExito(`Vendedor "${fullName}" creado. Comparte con él su usuario (${username}) y contraseña.`)
       setFullName('')
       setUsername('')
-      setEmail('')
       setPhone('')
       setKmPerGallon('')
       setPassword('')
@@ -117,15 +114,6 @@ export function FormularioCrearVendedor({ onCreado, mostrarSelectorPais, paisPre
           placeholder="Ej. jperez"
           className="input-field"
           autoCapitalize="none"
-        />
-      </div>
-      <div>
-        <label className="mb-1 block text-sm font-medium text-slate-700">Correo (opcional)</label>
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="input-field"
         />
       </div>
       <div>
