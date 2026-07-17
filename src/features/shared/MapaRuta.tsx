@@ -4,6 +4,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { FotoPrivada } from '../../components/FotoPrivada'
 import { formatMonto } from '../../lib/currency'
+import { fechaLocalISO } from '../../lib/fechas'
 import type { CountryCode, ParkingSpot, TiendaConLugar, VisitWithSales } from '../../lib/types'
 
 // Colores de marca, uno por día de la ruta (para distinguir de un vistazo qué visitas
@@ -137,14 +138,15 @@ export function MapaRuta({
     )
   }
 
-  // Un "día" es una fecha calendario distinta dentro de las visitas de esta semana; se
-  // numeran en orden cronológico (día 1 = la fecha más antigua) para pintar cada uno con
-  // su propio color de marca.
-  const fechasOrdenadas = Array.from(new Set(visitas.map((v) => v.captured_at.slice(0, 10)))).sort()
-  const indiceDia = (visita: VisitWithSales) => fechasOrdenadas.indexOf(visita.captured_at.slice(0, 10))
+  // Un "día" es una fecha calendario LOCAL distinta dentro de las visitas de esta semana (no
+  // UTC: captured_at.slice(0, 10) corría un día adelantado desde las 6pm hasta medianoche en
+  // Guatemala/El Salvador). Se numeran en orden cronológico (día 1 = la fecha más antigua)
+  // para pintar cada uno con su propio color de marca.
+  const fechasOrdenadas = Array.from(new Set(visitas.map((v) => fechaLocalISO(v.captured_at)))).sort()
+  const indiceDia = (visita: VisitWithSales) => fechasOrdenadas.indexOf(fechaLocalISO(visita.captured_at))
   const visitasPorDia = new Map<string, VisitWithSales[]>()
   for (const visita of visitas) {
-    const fecha = visita.captured_at.slice(0, 10)
+    const fecha = fechaLocalISO(visita.captured_at)
     if (!visitasPorDia.has(fecha)) visitasPorDia.set(fecha, [])
     visitasPorDia.get(fecha)!.push(visita)
   }

@@ -5,6 +5,7 @@ import JSZip from 'jszip'
 import { obtenerVendedores, obtenerDepositosDeVendedoresEnRango } from '../../lib/api'
 import { obtenerUrlFirmada } from '../../lib/storage'
 import { semanaISOActual, rangoDesdeSemanaISO } from '../../lib/semanaISO'
+import { fechaLocalISO } from '../../lib/fechas'
 import { PageHeader } from '../../components/PageHeader'
 import { Spinner } from '../../components/Spinner'
 import { IconDepositos } from '../../components/icons'
@@ -26,7 +27,7 @@ async function agregarDepositosAZip(zip: JSZip, depositos: Deposito[]) {
   for (const [i, deposito] of depositos.entries()) {
     const url = await obtenerUrlFirmada('deposit-photos', deposito.photo_path)
     const blob = await (await fetch(url)).blob()
-    const fecha = deposito.created_at.slice(0, 10)
+    const fecha = fechaLocalISO(deposito.created_at)
     zip.file(`deposito-${fecha}-${i + 1}.jpg`, blob)
   }
 }

@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { fechaLocalISO } from './fechas'
 import type {
   CountryCode,
   Deposito,
@@ -76,7 +77,7 @@ export async function finalizarSemana(
       end_mileage_km: endMileageKm,
       end_mileage_photo_path: endMileagePhotoPath,
       status: 'completed',
-      end_date: new Date().toISOString().slice(0, 10),
+      end_date: fechaLocalISO(),
       ended_at: new Date().toISOString(),
     })
     .eq('id', weekId)
