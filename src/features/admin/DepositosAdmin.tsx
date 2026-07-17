@@ -31,6 +31,13 @@ async function agregarDepositosAZip(zip: JSZip, depositos: Deposito[]) {
   }
 }
 
+// La descarga arma el ZIP en el navegador del admin, foto por foto y de forma secuencial:
+// con una semana muy activa esto puede tardar bastante y colgar la pestaña. Por eso se avisa
+// pasado un umbral y se bloquea el botón de "todos" en un extremo, sugiriendo bajar por
+// vendedor en su lugar (no es un límite de seguridad, es para no trabar el navegador).
+const LIMITE_ADVERTENCIA_TOTAL = 150
+const LIMITE_MAXIMO_TOTAL = 500
+
 const NOMBRE_ARCHIVO_INVALIDO = /[^a-z0-9-_]+/gi
 
 function slug(texto: string) {
@@ -86,7 +93,7 @@ export function DepositosAdmin() {
   }
 
   async function manejarDescargarTodos() {
-    if (totalDepositos === 0) return
+    if (totalDepositos === 0 || totalDepositos > LIMITE_MAXIMO_TOTAL) return
     setError(null)
     setDescargando('__todos__')
     try {
@@ -129,12 +136,24 @@ export function DepositosAdmin() {
         <button
           type="button"
           onClick={manejarDescargarTodos}
-          disabled={totalDepositos === 0 || descargando !== null}
+          disabled={totalDepositos === 0 || totalDepositos > LIMITE_MAXIMO_TOTAL || descargando !== null}
           className="btn-primary"
         >
           {descargando === '__todos__' ? 'Preparando ZIP...' : `⬇ Descargar todos (${totalDepositos})`}
         </button>
       </div>
+
+      {totalDepositos > LIMITE_MAXIMO_TOTAL && (
+        <p className="text-sm text-amber-600">
+          Hay demasiados depósitos ({totalDepositos}) para descargarlos todos a la vez. Descarga por
+          vendedor en la tabla de abajo, o elige una semana más corta.
+        </p>
+      )}
+      {totalDepositos > LIMITE_ADVERTENCIA_TOTAL && totalDepositos <= LIMITE_MAXIMO_TOTAL && (
+        <p className="text-sm text-amber-600">
+          Esta semana tiene {totalDepositos} depósitos: la descarga puede tardar varios minutos.
+        </p>
+      )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 

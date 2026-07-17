@@ -1,16 +1,21 @@
 // Edge Function: crea un operario (auth + perfil) y le asigna los vendedores indicados.
 // Solo puede ser invocada por un usuario autenticado con rol super_admin.
 import { createClient } from "npm:@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+import { corsHeadersFor } from "../_shared/cors.ts";
+import { registrarAuditoria } from "../_shared/auditLog.ts";
 
 Deno.serve(async (req) => {
+  const cors = corsHeadersFor(req);
+
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: cors });
+  }
+
+  function jsonResponse(body: unknown, status: number) {
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
   }
 
   try {
@@ -98,15 +103,16 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: asignError.message }, 400);
     }
 
+    await registrarAuditoria(adminClient, {
+      actor_id: user.id,
+      action: "create_operario",
+      target_id: created.user.id,
+      target_type: "profile",
+      metadata: { email, salesman_ids },
+    });
+
     return jsonResponse({ id: created.user.id, email, full_name }, 200);
   } catch (err) {
     return jsonResponse({ error: (err as Error).message }, 500);
   }
 });
-
-function jsonResponse(body: unknown, status: number) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}

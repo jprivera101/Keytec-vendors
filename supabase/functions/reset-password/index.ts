@@ -3,16 +3,21 @@
 // del usuario (Supabase invalida sus refresh tokens al hacerlo), asi que queda desconectado
 // de inmediato en todos sus dispositivos sin ningun paso adicional.
 import { createClient } from "npm:@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+import { corsHeadersFor } from "../_shared/cors.ts";
+import { registrarAuditoria } from "../_shared/auditLog.ts";
 
 Deno.serve(async (req) => {
+  const cors = corsHeadersFor(req);
+
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: cors });
+  }
+
+  function jsonResponse(body: unknown, status: number) {
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
   }
 
   try {
@@ -93,15 +98,16 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: updateError.message }, 400);
     }
 
+    // Nunca se guarda la contraseña en el log, solo quien la restablecio y a quien.
+    await registrarAuditoria(adminClient, {
+      actor_id: user.id,
+      action: "reset_password",
+      target_id: user_id,
+      target_type: "profile",
+    });
+
     return jsonResponse({ id: user_id }, 200);
   } catch (err) {
     return jsonResponse({ error: (err as Error).message }, 500);
   }
 });
-
-function jsonResponse(body: unknown, status: number) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
