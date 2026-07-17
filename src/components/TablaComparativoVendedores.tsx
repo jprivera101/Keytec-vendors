@@ -1,4 +1,5 @@
 import { formatMonto } from '../lib/currency'
+import { formatNumero } from '../lib/numeros'
 import type { ComparativoVendedor } from '../lib/types'
 
 interface Props {
@@ -50,11 +51,11 @@ export function TablaComparativoVendedores({
                   <td className="whitespace-nowrap px-3 py-2.5 font-medium text-slate-900">{fila.nombre}</td>
                   {mostrarKmActual && (
                     <td className="px-3 py-2.5 text-right text-slate-700">
-                      {fila.actual?.kmRecorridos != null ? `${fila.actual.kmRecorridos} km` : ''}
+                      {fila.actual?.kmRecorridos != null ? `${formatNumero(fila.actual.kmRecorridos)} km` : ''}
                     </td>
                   )}
                   <td className="px-3 py-2.5 text-right text-slate-400">
-                    {fila.anterior?.kmRecorridos != null ? `${fila.anterior.kmRecorridos} km` : ''}
+                    {fila.anterior?.kmRecorridos != null ? `${formatNumero(fila.anterior.kmRecorridos)} km` : ''}
                   </td>
                   <td className="px-3 py-2.5 text-right text-slate-700">
                     {fila.actual ? fila.actual.totalVisitas : ''}

@@ -3,6 +3,7 @@ import { Modal } from '../../components/Modal'
 import { CamaraCaptura } from '../../components/CamaraCaptura'
 import { comprimirImagen } from '../../lib/imageCompress'
 import { subirFoto } from '../../lib/storage'
+import { formatNumero } from '../../lib/numeros'
 
 interface Props {
   abierto: boolean
@@ -33,7 +34,7 @@ export function FinalizarSemanaModal({ abierto, kmInicial, userId, onCerrar, onC
       return
     }
     if (valor < kmInicial) {
-      setError(`El kilometraje final no puede ser menor al inicial (${kmInicial} km)`)
+      setError(`El kilometraje final no puede ser menor al inicial (${formatNumero(kmInicial)} km)`)
       return
     }
     if (!foto) {
@@ -58,7 +59,7 @@ export function FinalizarSemanaModal({ abierto, kmInicial, userId, onCerrar, onC
       <div className="space-y-4">
         <p className="text-sm text-slate-500">
           Toma una foto del odómetro e ingresa el kilometraje al terminar la ruta. Kilometraje
-          inicial: {kmInicial} km.
+          inicial: {formatNumero(kmInicial)} km.
         </p>
 
         <CamaraCaptura etiqueta="Foto del kilometraje final" onCapturada={setFoto} />

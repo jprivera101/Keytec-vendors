@@ -8,6 +8,7 @@ import {
   obtenerParqueosDeSemana,
 } from '../../lib/api'
 import { formatMonto } from '../../lib/currency'
+import { formatNumero } from '../../lib/numeros'
 import { Spinner } from '../../components/Spinner'
 import { FotoPrivada } from '../../components/FotoPrivada'
 import { Modal } from '../../components/Modal'
@@ -83,7 +84,7 @@ export function DetalleSemana({
           etiqueta="Estado"
           valor={semana.status === 'active' ? 'Activa' : 'Completada'}
         />
-        <StatCard etiqueta="Km recorridos" valor={kmRecorridos != null ? `${kmRecorridos} km` : '—'} />
+        <StatCard etiqueta="Km recorridos" valor={kmRecorridos != null ? `${formatNumero(kmRecorridos)} km` : '—'} />
         <StatCard etiqueta="Visitas" valor={String(visitas.length)} />
         <StatCard etiqueta="Total vendido" valor={formatMonto(totalVentas, country)} />
         <StatCard
@@ -185,7 +186,7 @@ function FotoKilometraje({
   return (
     <div className="card p-3">
       <p className="mb-2 text-xs text-slate-400">
-        {etiqueta} {km != null && <span className="font-semibold text-slate-700">· {km} km</span>}
+        {etiqueta} {km != null && <span className="font-semibold text-slate-700">· {formatNumero(km)} km</span>}
       </p>
       {path ? (
         <FotoPrivada

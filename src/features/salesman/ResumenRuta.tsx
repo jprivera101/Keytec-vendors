@@ -11,6 +11,7 @@ import {
 } from '../../lib/api'
 import { obtenerTiendasPorRegion } from '../../lib/tiendas'
 import { formatMonto } from '../../lib/currency'
+import { formatNumero } from '../../lib/numeros'
 import { useAuth } from '../../lib/useAuth'
 import { Spinner } from '../../components/Spinner'
 import { IconChevron } from '../../components/icons'
@@ -123,7 +124,7 @@ export function ResumenRuta({ weekId, puedeAgregarVenta = false, onAgregarVenta 
       <div className="grid grid-cols-3 gap-3">
         <StatTile etiqueta="Visitas" valor={String(visitas.length)} />
         <StatTile etiqueta="Tiendas" valor={String(tiendasDistintas)} />
-        <StatTile etiqueta="Km recorridos" valor={kmRecorridos != null ? `${kmRecorridos}` : '—'} />
+        <StatTile etiqueta="Km recorridos" valor={kmRecorridos != null ? formatNumero(kmRecorridos) : '—'} />
       </div>
 
       <div className="card overflow-hidden">

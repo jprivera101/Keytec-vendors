@@ -6,6 +6,7 @@ import { Spinner } from '../../components/Spinner'
 import { obtenerSemanaActiva, obtenerVisitasConVentas, obtenerVentasEnvioDeSemana } from '../../lib/api'
 import { crearSemana, finalizarSemana } from '../../lib/api'
 import { formatMonto } from '../../lib/currency'
+import { formatNumero } from '../../lib/numeros'
 import { IniciarSemanaModal } from './IniciarSemanaModal'
 import { FinalizarSemanaModal } from './FinalizarSemanaModal'
 import { NuevaVisitaModal } from './NuevaVisitaModal'
@@ -97,7 +98,7 @@ export function PanelVendedor() {
                 </span>
               </div>
               <p className="text-sm text-slate-500">
-                Kilometraje inicial: <span className="font-semibold text-slate-700">{semana.start_mileage_km} km</span>
+                Kilometraje inicial: <span className="font-semibold text-slate-700">{formatNumero(semana.start_mileage_km)} km</span>
               </p>
 
               <div className="mt-4 grid grid-cols-2 gap-3">
