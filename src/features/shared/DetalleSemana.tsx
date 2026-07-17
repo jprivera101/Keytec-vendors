@@ -5,11 +5,9 @@ import {
   obtenerVisitasConVentas,
   obtenerGasolinaDeSemana,
   obtenerVentasEnvioDeSemana,
-  obtenerDepositosDeVendedorEnRango,
   obtenerParqueosDeSemana,
 } from '../../lib/api'
 import { formatMonto } from '../../lib/currency'
-import { rangoDeSemana } from '../../lib/rangoSemana'
 import { Spinner } from '../../components/Spinner'
 import { FotoPrivada } from '../../components/FotoPrivada'
 import { Modal } from '../../components/Modal'
@@ -17,7 +15,6 @@ import { MapaRuta } from './MapaRuta'
 import { VisitaCard } from './VisitaCard'
 import { GasolinaCard } from './GasolinaCard'
 import { EnvioCard } from './EnvioCard'
-import { DepositoCard } from './DepositoCard'
 import type { CountryCode, TiendaConLugar } from '../../lib/types'
 
 export function DetalleSemana({
@@ -53,22 +50,12 @@ export function DetalleSemana({
     queryFn: () => obtenerVentasEnvioDeSemana(weekId),
   })
 
-  const depositosQuery = useQuery({
-    queryKey: ['depositos', semanaQuery.data?.salesman_id, semanaQuery.data?.start_date, semanaQuery.data?.end_date],
-    queryFn: () => {
-      const { desde, hasta } = rangoDeSemana(semanaQuery.data!)
-      return obtenerDepositosDeVendedorEnRango(semanaQuery.data!.salesman_id, desde, hasta)
-    },
-    enabled: !!semanaQuery.data,
-  })
-
   const parqueosQuery = useQuery({
     queryKey: ['parqueos', weekId],
     queryFn: () => obtenerParqueosDeSemana(weekId),
   })
 
   const [gasolinaAbierta, setGasolinaAbierta] = useState(false)
-  const [depositosAbiertos, setDepositosAbiertos] = useState(false)
 
   if (semanaQuery.isLoading || visitasQuery.isLoading) return <Spinner texto="Cargando semana..." />
   if (!semanaQuery.data) return <p className="p-4 text-sm text-red-600">No se encontró la semana</p>
@@ -78,7 +65,6 @@ export function DetalleSemana({
   const gasolina = gasolinaQuery.data ?? []
   const ventasEnvio = ventasEnvioQuery.data ?? []
   const parqueos = parqueosQuery.data ?? []
-  const depositos = depositosQuery.data ?? []
   const totalVentas =
     visitas.reduce((suma, v) => suma + v.sales.reduce((s, venta) => s + Number(venta.amount), 0), 0) +
     ventasEnvio.reduce((suma, v) => suma + Number(v.amount), 0)
@@ -106,11 +92,6 @@ export function DetalleSemana({
           onClick={gasolina.length > 0 ? () => setGasolinaAbierta(true) : undefined}
         />
         <StatCard etiqueta="Ventas sin procesar" valor={String(ventasSinProcesar)} resaltar={ventasSinProcesar > 0} />
-        <StatCard
-          etiqueta="💰 Depósitos"
-          valor={String(depositos.length)}
-          onClick={depositos.length > 0 ? () => setDepositosAbiertos(true) : undefined}
-        />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -151,14 +132,6 @@ export function DetalleSemana({
         <div className="space-y-3">
           {gasolina.map((registro) => (
             <GasolinaCard key={registro.id} registro={registro} country={country} />
-          ))}
-        </div>
-      </Modal>
-
-      <Modal titulo="Depósitos de la semana" abierto={depositosAbiertos} onCerrar={() => setDepositosAbiertos(false)}>
-        <div className="space-y-3">
-          {depositos.map((deposito) => (
-            <DepositoCard key={deposito.id} deposito={deposito} />
           ))}
         </div>
       </Modal>
