@@ -98,6 +98,17 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: updateError.message }, 400);
     }
 
+    // La contraseña que acaba de poner el admin es temporal: la app se la va a pedir
+    // reemplazar la proxima vez que esa persona inicie sesion.
+    const { error: flagError } = await adminClient
+      .from("profiles")
+      .update({ must_change_password: true })
+      .eq("id", user_id);
+
+    if (flagError) {
+      return jsonResponse({ error: flagError.message }, 400);
+    }
+
     // Nunca se guarda la contraseña en el log, solo quien la restablecio y a quien.
     await registrarAuditoria(adminClient, {
       actor_id: user.id,

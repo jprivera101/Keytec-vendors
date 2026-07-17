@@ -147,6 +147,7 @@ export function ResumenRuta({ weekId, puedeAgregarVenta = false, onAgregarVenta 
                 country={profile?.country}
                 alturaClase="h-48"
                 parkingSpots={parqueos}
+                popupMaxHeight={110}
               />
               {semana.status === 'active' && (
                 <button

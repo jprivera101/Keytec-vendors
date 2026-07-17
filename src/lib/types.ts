@@ -14,6 +14,9 @@ export interface Profile {
   km_per_gallon: number | null
   /** Nombre de usuario con el que inicia sesion (unico, sin importar mayusculas). */
   username: string | null
+  /** true si la contraseña actual es temporal (recien creada o restablecida) y debe
+   * reemplazarse antes de dejar usar el resto de la app. */
+  must_change_password: boolean
   created_at: string
 }
 

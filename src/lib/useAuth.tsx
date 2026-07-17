@@ -10,6 +10,7 @@ interface AuthContextValue {
   authError: string | null
   iniciarSesion: (email: string, password: string) => Promise<{ error: string | null }>
   cerrarSesion: () => Promise<void>
+  refrescarPerfil: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
@@ -72,9 +73,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut()
   }
 
+  async function refrescarPerfil() {
+    if (session) await cargarPerfil(session.user.id)
+  }
+
   return (
     <AuthContext.Provider
-      value={{ session, profile, cargando, authError, iniciarSesion, cerrarSesion }}
+      value={{ session, profile, cargando, authError, iniciarSesion, cerrarSesion, refrescarPerfil }}
     >
       {children}
     </AuthContext.Provider>

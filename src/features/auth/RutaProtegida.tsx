@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../../lib/useAuth'
 import { Spinner } from '../../components/Spinner'
+import { DefinirPassword } from './DefinirPassword'
 import type { UserRole } from '../../lib/types'
 
 export const RUTA_POR_ROL: Record<UserRole, string> = {
@@ -16,6 +17,7 @@ export function RutaProtegida({ roles, children }: { roles: UserRole[]; children
 
   if (cargando) return <Spinner texto="Cargando..." />
   if (!session || !profile) return <Navigate to="/login" replace />
+  if (profile.must_change_password) return <DefinirPassword />
   if (!roles.includes(profile.role)) {
     return <Navigate to={RUTA_POR_ROL[profile.role]} replace />
   }

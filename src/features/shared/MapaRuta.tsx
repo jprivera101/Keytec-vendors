@@ -109,6 +109,10 @@ interface Props {
   alturaClase?: string
   /** Parqueos marcados durante la semana; se muestran solo como pines (sin lista aparte). */
   parkingSpots?: ParkingSpot[]
+  /** Alto máximo (px) del contenido de cada popup antes de volverse scrolleable. Por
+   * defecto pensado para el mapa grande (h-80); el mapa chico del vendedor pasa uno menor
+   * para que el popup completo quepa dentro del contenedor (que recorta lo que se sale). */
+  popupMaxHeight?: number
 }
 
 export function MapaRuta({
@@ -118,6 +122,7 @@ export function MapaRuta({
   grupos,
   alturaClase = 'h-80',
   parkingSpots = [],
+  popupMaxHeight = 220,
 }: Props) {
   const posicionesVisitas: [number, number][] = visitas.map((v) => [v.latitude, v.longitude])
   const posicionesTiendas: [number, number][] = tiendasRegion.map((t) => [t.latitude, t.longitude])
@@ -184,12 +189,14 @@ export function MapaRuta({
         <MapContainer
           center={posicionesVisitas[0] ?? todasLasPosiciones[0]}
           zoom={13}
+          maxZoom={19}
           className="h-full w-full"
           scrollWheelZoom={false}
         >
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            maxZoom={19}
           />
           <AjustarLimites posiciones={todasLasPosiciones} />
           {grupos
@@ -224,7 +231,7 @@ export function MapaRuta({
               icon={iconoTienda}
               zIndexOffset={10000}
             >
-              <Popup>
+              <Popup maxHeight={popupMaxHeight}>
                 <div className="w-40">
                   {tienda.photo_path ? (
                     <FotoPrivada
@@ -256,7 +263,7 @@ export function MapaRuta({
                 position={[visita.latitude, visita.longitude]}
                 icon={iconoNumerado(numeroPorVisitaId.get(visita.id) ?? 1, colorPorVisitaId.get(visita.id) ?? colorDelDia(0))}
               >
-                <Popup>
+                <Popup maxHeight={popupMaxHeight}>
                   <div className="w-40">
                     <FotoPrivada
                       bucket="visit-photos"
@@ -283,7 +290,7 @@ export function MapaRuta({
           })}
           {parkingSpots.map((parqueo) => (
             <Marker key={parqueo.id} position={[parqueo.latitude, parqueo.longitude]} icon={iconoParqueo}>
-              <Popup>
+              <Popup maxHeight={popupMaxHeight}>
                 <div className="w-40">
                   <FotoPrivada
                     bucket="parking-photos"
