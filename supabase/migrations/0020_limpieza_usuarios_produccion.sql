@@ -37,6 +37,22 @@ begin
     raise exception 'Se esperaban exactamente 4 perfiles a conservar, se encontraron % - revisa los patrones antes de reintentar', total;
   end if;
 
+  -- places.created_by, stores.created_by, sales.processed_by y security_audit_log.actor_id
+  -- referencian profiles(id) SIN "on delete cascade" (a proposito: una tienda o una venta
+  -- procesada no debe desaparecer solo porque quien la creo/proceso se borra). Hay que
+  -- limpiar esas referencias antes del delete o la base de datos lo rechaza.
+  update public.places set created_by = null
+  where created_by is not null and not (created_by = any(ids_mantener));
+
+  update public.stores set created_by = null
+  where created_by is not null and not (created_by = any(ids_mantener));
+
+  update public.sales set processed_by = null
+  where processed_by is not null and not (processed_by = any(ids_mantener));
+
+  update public.security_audit_log set actor_id = null
+  where actor_id is not null and not (actor_id = any(ids_mantener));
+
   -- Borra todo lo demas. Cascada: auth.users -> profiles -> weeks/visits/sales/gasolina/
   -- depositos/parqueos/operario_asignaciones.
   delete from auth.users u
