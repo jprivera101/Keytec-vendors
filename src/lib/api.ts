@@ -1,9 +1,11 @@
 import { supabase } from './supabaseClient'
 import { fechaLocalISO } from './fechas'
 import type {
+  ComparativoVendedor,
   CountryCode,
   Deposito,
   GasolinaRegistro,
+  MetricasPeriodo,
   ParkingSpot,
   Profile,
   ResumenAdmin,
@@ -476,4 +478,170 @@ export async function obtenerResumenAdmin(
       country: paisPorNombre.get(nombre) ?? null,
     })).sort((a, b) => b.total - a.total),
   }
+}
+
+// Comparativo semana/mes ------------------------------------------------
+
+/** Visitas + ventas (de tienda y por envío) de un grupo de semanas, de un solo jalón. */
+async function metricasPorSemana(weekIds: string[]): Promise<Map<string, { visitas: number; ventas: number }>> {
+  const resultado = new Map<string, { visitas: number; ventas: number }>()
+  if (weekIds.length === 0) return resultado
+
+  const { data: visitas, error } = await supabase
+    .from('visits')
+    .select('week_id, sales(amount)')
+    .in('week_id', weekIds)
+  if (error) throw error
+
+  for (const v of (visitas ?? []) as unknown as { week_id: string; sales: { amount: number }[] }[]) {
+    const fila = resultado.get(v.week_id) ?? { visitas: 0, ventas: 0 }
+    fila.visitas += 1
+    fila.ventas += (v.sales ?? []).reduce((s, venta) => s + Number(venta.amount), 0)
+    resultado.set(v.week_id, fila)
+  }
+
+  const { data: envios, error: enviosError } = await supabase
+    .from('shipment_sales')
+    .select('week_id, amount')
+    .in('week_id', weekIds)
+  if (enviosError) throw enviosError
+
+  for (const e of envios ?? []) {
+    const fila = resultado.get(e.week_id) ?? { visitas: 0, ventas: 0 }
+    fila.ventas += Number(e.amount)
+    resultado.set(e.week_id, fila)
+  }
+
+  return resultado
+}
+
+interface FilaSemana {
+  id: string
+  salesman_id: string
+  start_date: string
+  start_mileage_km: number
+  end_mileage_km: number | null
+}
+
+/** Vendedores con una semana ACTIVA ahora mismo, comparados contra su semana anterior ya
+ * completada (la más reciente antes de la activa). Si un vendedor no tiene ninguna semana
+ * completada previa (p.ej. es su primera semana), "anterior" queda en null — el llamador lo
+ * debe mostrar en blanco, no como cero. */
+export async function obtenerComparativoSemanal(
+  pais: CountryCode | 'ALL' = 'ALL',
+  region: string | 'ALL' = 'ALL',
+): Promise<ComparativoVendedor[]> {
+  let query = supabase
+    .from('weeks')
+    .select('id, salesman_id, start_date, start_mileage_km, end_mileage_km, profiles!inner(full_name, country, route_id, active)')
+    .eq('status', 'active')
+    .eq('profiles.active', true)
+  if (pais !== 'ALL') query = query.eq('profiles.country', pais)
+  if (region !== 'ALL') query = query.eq('profiles.route_id', region)
+  const { data: semanasActivas, error } = await query
+  if (error) throw error
+  if (!semanasActivas || semanasActivas.length === 0) return []
+
+  const vendedorIds = semanasActivas.map((s) => s.salesman_id)
+
+  const { data: semanasCompletadas, error: completadasError } = await supabase
+    .from('weeks')
+    .select('id, salesman_id, start_date, start_mileage_km, end_mileage_km')
+    .in('salesman_id', vendedorIds)
+    .eq('status', 'completed')
+    .order('start_date', { ascending: false })
+  if (completadasError) throw completadasError
+
+  const anteriorPorVendedor = new Map<string, FilaSemana>()
+  for (const semana of (semanasCompletadas ?? []) as FilaSemana[]) {
+    if (!anteriorPorVendedor.has(semana.salesman_id)) anteriorPorVendedor.set(semana.salesman_id, semana)
+  }
+
+  const todasLasSemanaIds = [
+    ...semanasActivas.map((s) => s.id),
+    ...Array.from(anteriorPorVendedor.values()).map((s) => s.id),
+  ]
+  const metricas = await metricasPorSemana(todasLasSemanaIds)
+
+  function aMetricas(semana?: FilaSemana): MetricasPeriodo | null {
+    if (!semana) return null
+    const m = metricas.get(semana.id)
+    return {
+      kmRecorridos: semana.end_mileage_km != null ? semana.end_mileage_km - semana.start_mileage_km : null,
+      totalVisitas: m?.visitas ?? 0,
+      totalVentas: m?.ventas ?? 0,
+    }
+  }
+
+  return (semanasActivas as unknown as (FilaSemana & { profiles: { full_name: string; country: CountryCode | null } })[])
+    .map((semana) => ({
+      vendedorId: semana.salesman_id,
+      nombre: semana.profiles?.full_name ?? 'Vendedor',
+      country: semana.profiles?.country ?? null,
+      actual: aMetricas(semana),
+      anterior: aMetricas(anteriorPorVendedor.get(semana.salesman_id)),
+    }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre))
+}
+
+/** Vendedores activos (sin importar si tienen una semana activa ahora mismo) con sus
+ * métricas acumuladas del mes calendario actual vs. el mes pasado. El kilometraje de un mes
+ * solo suma las semanas ya finalizadas de ese mes (una semana activa sin kilometraje final
+ * no se puede sumar todavía); si ninguna semana del mes está finalizada, queda en null. */
+export async function obtenerComparativoMensual(
+  pais: CountryCode | 'ALL' = 'ALL',
+  region: string | 'ALL' = 'ALL',
+): Promise<ComparativoVendedor[]> {
+  const vendedores = (await obtenerVendedores(pais, region)).filter((v) => v.active)
+  if (vendedores.length === 0) return []
+  const vendedorIds = vendedores.map((v) => v.id)
+
+  const ahora = new Date()
+  const inicioMesActual = fechaLocalISO(new Date(ahora.getFullYear(), ahora.getMonth(), 1))
+  const inicioMesSiguiente = fechaLocalISO(new Date(ahora.getFullYear(), ahora.getMonth() + 1, 1))
+  const inicioMesPasado = fechaLocalISO(new Date(ahora.getFullYear(), ahora.getMonth() - 1, 1))
+
+  const { data: semanasDelPeriodo, error } = await supabase
+    .from('weeks')
+    .select('id, salesman_id, start_date, start_mileage_km, end_mileage_km')
+    .in('salesman_id', vendedorIds)
+    .gte('start_date', inicioMesPasado)
+    .lt('start_date', inicioMesSiguiente)
+  if (error) throw error
+
+  const semanas = (semanasDelPeriodo ?? []) as FilaSemana[]
+  const metricas = await metricasPorSemana(semanas.map((s) => s.id))
+
+  function acumular(delVendedor: FilaSemana[]): MetricasPeriodo | null {
+    if (delVendedor.length === 0) return null
+    let km = 0
+    let huboSemanaFinalizada = false
+    let visitas = 0
+    let ventas = 0
+    for (const semana of delVendedor) {
+      if (semana.end_mileage_km != null) {
+        km += semana.end_mileage_km - semana.start_mileage_km
+        huboSemanaFinalizada = true
+      }
+      const m = metricas.get(semana.id)
+      visitas += m?.visitas ?? 0
+      ventas += m?.ventas ?? 0
+    }
+    return { kmRecorridos: huboSemanaFinalizada ? km : null, totalVisitas: visitas, totalVentas: ventas }
+  }
+
+  return vendedores
+    .map((vendedor) => {
+      const semanasVendedor = semanas.filter((s) => s.salesman_id === vendedor.id)
+      const delMesActual = semanasVendedor.filter((s) => s.start_date >= inicioMesActual)
+      const delMesPasado = semanasVendedor.filter((s) => s.start_date < inicioMesActual)
+      return {
+        vendedorId: vendedor.id,
+        nombre: vendedor.full_name,
+        country: vendedor.country,
+        actual: acumular(delMesActual),
+        anterior: acumular(delMesPasado),
+      }
+    })
+    .sort((a, b) => a.nombre.localeCompare(b.nombre))
 }

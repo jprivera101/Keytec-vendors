@@ -122,6 +122,26 @@ export interface VentaEnvio {
   created_at: string
 }
 
+/** Métricas de un vendedor en un período (semana o mes). kmRecorridos es null cuando no se
+ * puede calcular todavía (semana activa sin kilometraje final, o mes sin ninguna semana
+ * finalizada) — se muestra en blanco, no como 0. */
+export interface MetricasPeriodo {
+  kmRecorridos: number | null
+  totalVisitas: number
+  totalVentas: number
+}
+
+/** Un vendedor con sus métricas del período actual y del período anterior, para la
+ * comparación "vs semana/mes pasado" del Resumen. `anterior` es null cuando no hay un
+ * período previo con el que comparar (p.ej. su primera semana) — se deja en blanco. */
+export interface ComparativoVendedor {
+  vendedorId: string
+  nombre: string
+  country: CountryCode | null
+  actual: MetricasPeriodo | null
+  anterior: MetricasPeriodo | null
+}
+
 export interface ResumenAdmin {
   vendedoresActivos: number
   rutasActivas: number
