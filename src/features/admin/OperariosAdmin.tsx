@@ -65,6 +65,7 @@ export function OperariosAdmin({ mostrarEncabezado = true }: { mostrarEncabezado
 
       <div className="card overflow-hidden">
         {operariosQuery.isLoading && <Spinner />}
+        <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
             <tr>
@@ -95,18 +96,18 @@ export function OperariosAdmin({ mostrarEncabezado = true }: { mostrarEncabezado
                   </span>
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <div className="flex justify-end gap-2">
+                  <div className="flex flex-wrap justify-end gap-2">
                     <button
                       type="button"
                       onClick={() => setOperarioEditar(operario)}
-                      className="btn-secondary btn-sm"
+                      className="btn-secondary btn-sm w-28"
                     >
                       Editar asignación
                     </button>
                     <button
                       type="button"
                       onClick={() => setOperarioPassword(operario)}
-                      className="btn-secondary btn-sm"
+                      className="btn-secondary btn-sm w-28"
                     >
                       Restablecer contraseña
                     </button>
@@ -114,7 +115,7 @@ export function OperariosAdmin({ mostrarEncabezado = true }: { mostrarEncabezado
                       type="button"
                       onClick={() => alternarActivo(operario)}
                       disabled={cambiandoEstado === operario.id}
-                      className="btn-secondary btn-sm"
+                      className="btn-secondary btn-sm w-28"
                     >
                       {cambiandoEstado === operario.id
                         ? 'Guardando...'
@@ -135,6 +136,7 @@ export function OperariosAdmin({ mostrarEncabezado = true }: { mostrarEncabezado
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       <Modal titulo="Nuevo operario" abierto={modalCrear} onCerrar={() => setModalCrear(false)}>

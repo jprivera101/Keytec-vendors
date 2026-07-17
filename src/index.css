@@ -41,11 +41,14 @@ body {
     @apply rounded-2xl border border-slate-100 bg-white shadow-sm;
   }
 
+  /* Sin whitespace-nowrap a propósito: una etiqueta larga (p.ej. "Restablecer contraseña")
+     debe poder partirse en dos líneas dentro del botón en vez de forzar la fila entera a
+     desbordarse — el mismo criterio que ya se usaba para "Ver rutas →". */
   .btn-primary,
   .btn-secondary,
   .btn-outline,
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-center text-sm font-semibold transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100;
   }
   .btn-primary {
     @apply bg-brand-700 text-white shadow-sm shadow-brand-700/25 hover:bg-brand-800 hover:shadow-md;
@@ -60,7 +63,7 @@ body {
     @apply text-brand-700 hover:bg-brand-50;
   }
   .btn-sm {
-    @apply px-3 py-1.5 text-xs;
+    @apply px-3.5 py-2 text-xs;
   }
 
   .input-field {

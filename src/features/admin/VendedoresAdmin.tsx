@@ -76,6 +76,7 @@ export function VendedoresAdmin({ mostrarEncabezado = true }: { mostrarEncabezad
 
       <div className="card overflow-hidden">
         {vendedoresQuery.isLoading && <Spinner />}
+        <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
             <tr>
@@ -124,18 +125,18 @@ export function VendedoresAdmin({ mostrarEncabezado = true }: { mostrarEncabezad
                   </Link>
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <div className="flex justify-end gap-2">
+                  <div className="flex flex-wrap justify-end gap-2">
                     <button
                       type="button"
                       onClick={() => setVendedorEditar(vendedor)}
-                      className="btn-secondary btn-sm"
+                      className="btn-secondary btn-sm w-28"
                     >
                       Editar
                     </button>
                     <button
                       type="button"
                       onClick={() => setVendedorPassword(vendedor)}
-                      className="btn-secondary btn-sm"
+                      className="btn-secondary btn-sm w-28"
                     >
                       Restablecer contraseña
                     </button>
@@ -143,7 +144,7 @@ export function VendedoresAdmin({ mostrarEncabezado = true }: { mostrarEncabezad
                       type="button"
                       onClick={() => alternarActivo(vendedor)}
                       disabled={cambiandoEstado === vendedor.id}
-                      className="btn-secondary btn-sm"
+                      className="btn-secondary btn-sm w-28"
                     >
                       {cambiandoEstado === vendedor.id
                         ? 'Guardando...'
@@ -164,6 +165,7 @@ export function VendedoresAdmin({ mostrarEncabezado = true }: { mostrarEncabezad
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       <Modal titulo="Nuevo vendedor" abierto={modalCrear} onCerrar={() => setModalCrear(false)}>
