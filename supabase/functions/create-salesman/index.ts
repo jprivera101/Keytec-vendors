@@ -3,7 +3,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeadersFor } from "../_shared/cors.ts";
 import { registrarAuditoria } from "../_shared/auditLog.ts";
-import { normalizarUsername, esViolacionDeUnicidad } from "../_shared/username.ts";
+import { normalizarUsername, esViolacionDeUnicidad, emailFinal } from "../_shared/username.ts";
 
 const PAISES_VALIDOS = ["GT", "SV"];
 
@@ -63,8 +63,8 @@ Deno.serve(async (req) => {
     const { email, password, full_name, phone, route_id, km_per_gallon } = body ?? {};
     let { country } = body ?? {};
 
-    if (!email || !password || !full_name) {
-      return jsonResponse({ error: "email, password y full_name son requeridos" }, 400);
+    if (!password || !full_name) {
+      return jsonResponse({ error: "password y full_name son requeridos" }, 400);
     }
     if (!route_id) {
       return jsonResponse({ error: "route_id (región) es requerido" }, 400);
@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
     }
 
     const { data: created, error: createError } = await adminClient.auth.admin.createUser({
-      email,
+      email: emailFinal(email, username),
       password,
       email_confirm: true,
     });
@@ -134,10 +134,10 @@ Deno.serve(async (req) => {
       action: "create_salesman",
       target_id: created.user.id,
       target_type: "profile",
-      metadata: { email, country, route_id },
+      metadata: { email: created.user.email, country, route_id },
     });
 
-    return jsonResponse({ id: created.user.id, email, full_name }, 200);
+    return jsonResponse({ id: created.user.id, email: created.user.email, full_name }, 200);
   } catch (err) {
     return jsonResponse({ error: (err as Error).message }, 500);
   }

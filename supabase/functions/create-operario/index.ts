@@ -3,7 +3,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeadersFor } from "../_shared/cors.ts";
 import { registrarAuditoria } from "../_shared/auditLog.ts";
-import { normalizarUsername, esViolacionDeUnicidad } from "../_shared/username.ts";
+import { normalizarUsername, esViolacionDeUnicidad, emailFinal } from "../_shared/username.ts";
 
 Deno.serve(async (req) => {
   const cors = corsHeadersFor(req);
@@ -56,14 +56,13 @@ Deno.serve(async (req) => {
     const { email, password, full_name, phone, salesman_ids } = body ?? {};
 
     if (
-      !email ||
       !password ||
       !full_name ||
       !Array.isArray(salesman_ids) ||
       salesman_ids.length === 0
     ) {
       return jsonResponse(
-        { error: "email, password, full_name y al menos un vendedor asignado son requeridos" },
+        { error: "password, full_name y al menos un vendedor asignado son requeridos" },
         400,
       );
     }
@@ -78,7 +77,7 @@ Deno.serve(async (req) => {
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
     const { data: created, error: createError } = await adminClient.auth.admin.createUser({
-      email,
+      email: emailFinal(email, username),
       password,
       email_confirm: true,
     });
@@ -120,10 +119,10 @@ Deno.serve(async (req) => {
       action: "create_operario",
       target_id: created.user.id,
       target_type: "profile",
-      metadata: { email, salesman_ids },
+      metadata: { email: created.user.email, salesman_ids },
     });
 
-    return jsonResponse({ id: created.user.id, email, full_name }, 200);
+    return jsonResponse({ id: created.user.id, email: created.user.email, full_name }, 200);
   } catch (err) {
     return jsonResponse({ error: (err as Error).message }, 500);
   }

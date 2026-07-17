@@ -3,7 +3,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeadersFor } from "../_shared/cors.ts";
 import { registrarAuditoria } from "../_shared/auditLog.ts";
-import { normalizarUsername, esViolacionDeUnicidad } from "../_shared/username.ts";
+import { normalizarUsername, esViolacionDeUnicidad, emailFinal } from "../_shared/username.ts";
 
 const PAISES_VALIDOS = ["GT", "SV"];
 
@@ -57,9 +57,9 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { email, password, full_name, phone, country } = body ?? {};
 
-    if (!email || !password || !full_name || !PAISES_VALIDOS.includes(country)) {
+    if (!password || !full_name || !PAISES_VALIDOS.includes(country)) {
       return jsonResponse(
-        { error: "email, password, full_name y country (GT o SV) son requeridos" },
+        { error: "password, full_name y country (GT o SV) son requeridos" },
         400,
       );
     }
@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
     const { data: created, error: createError } = await adminClient.auth.admin.createUser({
-      email,
+      email: emailFinal(email, username),
       password,
       email_confirm: true,
     });
@@ -105,10 +105,10 @@ Deno.serve(async (req) => {
       action: "create_admin",
       target_id: created.user.id,
       target_type: "profile",
-      metadata: { email, country },
+      metadata: { email: created.user.email, country },
     });
 
-    return jsonResponse({ id: created.user.id, email, full_name, country }, 200);
+    return jsonResponse({ id: created.user.id, email: created.user.email, full_name, country }, 200);
   } catch (err) {
     return jsonResponse({ error: (err as Error).message }, 500);
   }

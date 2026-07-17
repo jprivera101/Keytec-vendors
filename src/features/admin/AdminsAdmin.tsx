@@ -208,10 +208,9 @@ function FormularioCrearAdmin({ onCreado }: { onCreado: () => void }) {
         />
       </div>
       <div>
-        <label className="mb-1 block text-sm font-medium text-slate-700">Correo</label>
+        <label className="mb-1 block text-sm font-medium text-slate-700">Correo (opcional)</label>
         <input
           type="email"
-          required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           className="input-field"
