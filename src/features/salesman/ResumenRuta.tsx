@@ -36,7 +36,7 @@ interface Props {
 export function ResumenRuta({ weekId, puedeAgregarVenta = false, onAgregarVenta = () => {} }: Props) {
   const { profile } = useAuth()
   const queryClient = useQueryClient()
-  const [mapaVisitasAbierto, setMapaVisitasAbierto] = useState(false)
+  const [mapaAbierto, setMapaAbierto] = useState(false)
   const [busqueda, setBusqueda] = useState('')
   const [modalParqueo, setModalParqueo] = useState(false)
   const semanaQuery = useQuery({
@@ -129,17 +129,17 @@ export function ResumenRuta({ weekId, puedeAgregarVenta = false, onAgregarVenta 
       <div className="card overflow-hidden">
         <button
           type="button"
-          onClick={() => setMapaVisitasAbierto((v) => !v)}
+          onClick={() => setMapaAbierto((v) => !v)}
           className="flex w-full items-center justify-between p-3 text-left"
         >
-          <h3 className="text-sm font-semibold text-slate-500">Mapa y visitas</h3>
+          <h3 className="text-sm font-semibold text-slate-500">Mapa</h3>
           <IconChevron
-            className={`text-slate-400 transition-transform ${mapaVisitasAbierto ? 'rotate-180' : ''}`}
+            className={`text-slate-400 transition-transform ${mapaAbierto ? 'rotate-180' : ''}`}
           />
         </button>
 
-        {mapaVisitasAbierto && (
-          <div className="space-y-4 border-t border-slate-100 p-3">
+        {mapaAbierto && (
+          <div className="border-t border-slate-100 p-3">
             <div className="relative">
               <MapaRuta
                 visitas={visitas}
@@ -159,38 +159,36 @@ export function ResumenRuta({ weekId, puedeAgregarVenta = false, onAgregarVenta 
                 </button>
               )}
             </div>
-
-            <div>
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold text-slate-500">Visitas</h3>
-                <input
-                  type="text"
-                  value={busqueda}
-                  onChange={(e) => setBusqueda(e.target.value)}
-                  placeholder="Buscar tienda..."
-                  className="input-field w-40 py-1.5 text-sm"
-                />
-              </div>
-              <div className="space-y-3">
-                {[...visitas]
-                  .reverse()
-                  .filter((visita) =>
-                    (visita.store_name ?? '').toLowerCase().includes(busqueda.trim().toLowerCase()),
-                  )
-                  .map((visita) => (
-                    <VisitaCard
-                      key={visita.id}
-                      visita={visita}
-                      puedeAgregarVenta={puedeAgregarVenta}
-                      onAgregarVenta={onAgregarVenta}
-                      country={profile?.country}
-                    />
-                  ))}
-                {visitas.length === 0 && <p className="text-sm text-slate-400">Sin visitas registradas.</p>}
-              </div>
-            </div>
           </div>
         )}
+      </div>
+
+      <div>
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <h3 className="text-sm font-semibold text-slate-500">Visitas</h3>
+          <input
+            type="text"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar tienda..."
+            className="input-field w-40 py-1.5 text-sm"
+          />
+        </div>
+        <div className="space-y-3">
+          {[...visitas]
+            .reverse()
+            .filter((visita) => (visita.store_name ?? '').toLowerCase().includes(busqueda.trim().toLowerCase()))
+            .map((visita) => (
+              <VisitaCard
+                key={visita.id}
+                visita={visita}
+                puedeAgregarVenta={puedeAgregarVenta}
+                onAgregarVenta={onAgregarVenta}
+                country={profile?.country}
+              />
+            ))}
+          {visitas.length === 0 && <p className="text-sm text-slate-400">Sin visitas registradas.</p>}
+        </div>
       </div>
 
       {ventasEnvio.length > 0 && (

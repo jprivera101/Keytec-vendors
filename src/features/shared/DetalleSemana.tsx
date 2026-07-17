@@ -13,7 +13,6 @@ import { rangoDeSemana } from '../../lib/rangoSemana'
 import { Spinner } from '../../components/Spinner'
 import { FotoPrivada } from '../../components/FotoPrivada'
 import { Modal } from '../../components/Modal'
-import { IconChevron } from '../../components/icons'
 import { MapaRuta } from './MapaRuta'
 import { VisitaCard } from './VisitaCard'
 import { GasolinaCard } from './GasolinaCard'
@@ -70,7 +69,6 @@ export function DetalleSemana({
 
   const [gasolinaAbierta, setGasolinaAbierta] = useState(false)
   const [depositosAbiertos, setDepositosAbiertos] = useState(false)
-  const [mapaVisitasAbierto, setMapaVisitasAbierto] = useState(true)
 
   if (semanaQuery.isLoading || visitasQuery.isLoading) return <Spinner texto="Cargando semana..." />
   if (!semanaQuery.data) return <p className="p-4 text-sm text-red-600">No se encontró la semana</p>
@@ -120,39 +118,22 @@ export function DetalleSemana({
         <FotoKilometraje etiqueta="Kilometraje final" km={semana.end_mileage_km} path={semana.end_mileage_photo_path} />
       </div>
 
-      <div className="card overflow-hidden">
-        <button
-          type="button"
-          onClick={() => setMapaVisitasAbierto((v) => !v)}
-          className="flex w-full items-center justify-between p-3 text-left"
-        >
-          <h3 className="text-sm font-semibold text-slate-500">Mapa y visitas</h3>
-          <IconChevron
-            className={`text-slate-400 transition-transform ${mapaVisitasAbierto ? 'rotate-180' : ''}`}
-          />
-        </button>
+      <MapaRuta visitas={visitas} tiendasRegion={tiendasRegion} country={country} parkingSpots={parqueos} />
 
-        {mapaVisitasAbierto && (
-          <div className="space-y-4 border-t border-slate-100 p-3">
-            <MapaRuta visitas={visitas} tiendasRegion={tiendasRegion} country={country} parkingSpots={parqueos} />
-
-            <div>
-              <h3 className="mb-2 text-sm font-semibold text-slate-500">Visitas</h3>
-              <div className="space-y-3">
-                {visitas.map((visita) => (
-                  <VisitaCard
-                    key={visita.id}
-                    visita={visita}
-                    puedeAgregarVenta={puedeAgregarVenta}
-                    onAgregarVenta={onAgregarVenta}
-                    country={country}
-                  />
-                ))}
-                {visitas.length === 0 && <p className="text-sm text-slate-400">Sin visitas registradas.</p>}
-              </div>
-            </div>
-          </div>
-        )}
+      <div>
+        <h3 className="mb-2 text-sm font-semibold text-slate-500">Visitas</h3>
+        <div className="space-y-3">
+          {visitas.map((visita) => (
+            <VisitaCard
+              key={visita.id}
+              visita={visita}
+              puedeAgregarVenta={puedeAgregarVenta}
+              onAgregarVenta={onAgregarVenta}
+              country={country}
+            />
+          ))}
+          {visitas.length === 0 && <p className="text-sm text-slate-400">Sin visitas registradas.</p>}
+        </div>
       </div>
 
       {ventasEnvio.length > 0 && (
