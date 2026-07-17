@@ -4,7 +4,15 @@ import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../../lib/useAuth'
 import { PoweredByPenthouse } from '../../components/PoweredByPenthouse'
 import { obtenerRegionesPorPais } from '../../lib/regiones'
-import { IconAnalitica, IconGlobo, IconResumen, IconRoles, IconTiendas, IconVendedores } from '../../components/icons'
+import {
+  IconAnalitica,
+  IconDepositos,
+  IconGlobo,
+  IconResumen,
+  IconRoles,
+  IconTiendas,
+  IconVendedores,
+} from '../../components/icons'
 import { Flag } from '../../components/flags'
 import type { CountryCode, Profile } from '../../lib/types'
 
@@ -53,6 +61,7 @@ export function AdminLayout() {
       : [{ to: '/admin/vendedores', etiqueta: 'Vendedores', fin: false, Icono: IconVendedores }]),
     { to: '/admin/tiendas', etiqueta: 'Tiendas', fin: false, Icono: IconTiendas },
     { to: '/admin/analitica', etiqueta: 'Analítica', fin: false, Icono: IconAnalitica },
+    { to: '/admin/depositos', etiqueta: 'Depósitos', fin: false, Icono: IconDepositos },
     ...(esSuperAdmin ? [{ to: '/admin/roles', etiqueta: 'Roles', fin: false, Icono: IconRoles }] : []),
   ]
 

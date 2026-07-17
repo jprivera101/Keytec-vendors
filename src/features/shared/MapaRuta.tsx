@@ -4,7 +4,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { FotoPrivada } from '../../components/FotoPrivada'
 import { formatMonto } from '../../lib/currency'
-import type { CountryCode, TiendaConLugar, VisitWithSales } from '../../lib/types'
+import type { CountryCode, ParkingSpot, TiendaConLugar, VisitWithSales } from '../../lib/types'
 
 // Colores de marca, uno por día de la ruta (para distinguir de un vistazo qué visitas
 // pasaron el mismo día): azul, amarillo, morado — y se repiten si la semana tiene más días.
@@ -46,6 +46,34 @@ const iconoTienda = L.divIcon({
   popupAnchor: [0, -26],
 })
 
+// Pin de parqueo: globo naranja con circulo blanco y una "P" oscura, igual al icono de
+// referencia que se usa para marcar zonas de parqueo publico.
+const iconoParqueo = L.divIcon({
+  className: '',
+  html: `
+    <div style="filter:drop-shadow(0 1px 2px rgba(0,0,0,0.45))">
+      <svg width="26" height="34" viewBox="0 0 26 34" xmlns="http://www.w3.org/2000/svg">
+        <path d="M13 0C5.82 0 0 5.82 0 13c0 9.75 13 21 13 21s13-11.25 13-21C26 5.82 20.18 0 13 0z" fill="#EA5A33" stroke="white" stroke-width="1.3"/>
+        <circle cx="13" cy="13" r="9.3" fill="#EEF2F3"/>
+        <text x="13" y="18" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" font-weight="700" fill="#0D2A3E">P</text>
+      </svg>
+    </div>
+  `,
+  iconSize: [26, 34],
+  iconAnchor: [13, 34],
+  popupAnchor: [0, -30],
+})
+
+function formatearDuracion(inicioIso: string, finIso: string | null) {
+  const inicio = new Date(inicioIso).getTime()
+  const fin = finIso ? new Date(finIso).getTime() : Date.now()
+  const minutosTotales = Math.max(0, Math.round((fin - inicio) / 60000))
+  const horas = Math.floor(minutosTotales / 60)
+  const minutos = minutosTotales % 60
+  const duracion = horas > 0 ? `${horas}h ${minutos}m` : `${minutos}m`
+  return finIso ? duracion : `${duracion} (aún parqueado)`
+}
+
 function AjustarLimites({ posiciones }: { posiciones: [number, number][] }) {
   const map = useMap()
   useEffect(() => {
@@ -76,16 +104,29 @@ interface Props {
    * general, en vez de por día). Si se pasa, reemplaza el agrupado por día por defecto tanto
    * en las líneas/números como en la leyenda. */
   grupos?: Grupo[]
+  /** Clase de altura del contenedor del mapa (Tailwind, p. ej. 'h-48'). Por defecto 'h-80'; el
+   * vendedor en su celular pasa una más baja para que el mapa no ocupe toda la pantalla. */
+  alturaClase?: string
+  /** Parqueos marcados durante la semana; se muestran solo como pines (sin lista aparte). */
+  parkingSpots?: ParkingSpot[]
 }
 
-export function MapaRuta({ visitas, tiendasRegion = [], country, grupos }: Props) {
+export function MapaRuta({
+  visitas,
+  tiendasRegion = [],
+  country,
+  grupos,
+  alturaClase = 'h-80',
+  parkingSpots = [],
+}: Props) {
   const posicionesVisitas: [number, number][] = visitas.map((v) => [v.latitude, v.longitude])
   const posicionesTiendas: [number, number][] = tiendasRegion.map((t) => [t.latitude, t.longitude])
-  const todasLasPosiciones = [...posicionesVisitas, ...posicionesTiendas]
+  const posicionesParqueo: [number, number][] = parkingSpots.map((p) => [p.latitude, p.longitude])
+  const todasLasPosiciones = [...posicionesVisitas, ...posicionesTiendas, ...posicionesParqueo]
 
-  if (visitas.length === 0) {
+  if (visitas.length === 0 && parkingSpots.length === 0) {
     return (
-      <div className="flex h-72 items-center justify-center rounded-xl bg-slate-100 text-sm text-slate-400">
+      <div className={`flex ${alturaClase} items-center justify-center rounded-xl bg-slate-100 text-sm text-slate-400`}>
         Sin visitas registradas todavía
       </div>
     )
@@ -139,8 +180,13 @@ export function MapaRuta({ visitas, tiendasRegion = [], country, grupos }: Props
 
   return (
     <div>
-      <div className="h-80 w-full overflow-hidden rounded-xl">
-        <MapContainer center={posicionesVisitas[0]} zoom={13} className="h-full w-full" scrollWheelZoom={false}>
+      <div className={`${alturaClase} w-full overflow-hidden rounded-xl`}>
+        <MapContainer
+          center={posicionesVisitas[0] ?? todasLasPosiciones[0]}
+          zoom={13}
+          className="h-full w-full"
+          scrollWheelZoom={false}
+        >
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -235,6 +281,27 @@ export function MapaRuta({ visitas, tiendasRegion = [], country, grupos }: Props
               </Marker>
             )
           })}
+          {parkingSpots.map((parqueo) => (
+            <Marker key={parqueo.id} position={[parqueo.latitude, parqueo.longitude]} icon={iconoParqueo}>
+              <Popup>
+                <div className="w-40">
+                  <FotoPrivada
+                    bucket="parking-photos"
+                    path={parqueo.car_photo_path}
+                    alt="Foto del carro parqueado"
+                    className="mb-2 h-24 w-full rounded object-cover"
+                  />
+                  <p className="text-sm font-semibold">🅿️ Parqueo</p>
+                  <p className="text-xs text-slate-500">
+                    {new Date(parqueo.started_at).toLocaleString('es-GT')}
+                  </p>
+                  <p className="mt-1 text-xs font-medium text-brand-700">
+                    {formatearDuracion(parqueo.started_at, parqueo.ended_at)}
+                  </p>
+                </div>
+              </Popup>
+            </Marker>
+          ))}
         </MapContainer>
       </div>
       <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-500">

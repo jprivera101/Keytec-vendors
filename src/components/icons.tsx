@@ -121,6 +121,25 @@ export function IconProcesar(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+export function IconDepositos(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <rect x="3.5" y="6.5" width="17" height="12" rx="2" />
+      <path d="M3.5 10.5h17" />
+      <circle cx="15.5" cy="14.3" r="1.6" />
+    </Base>
+  )
+}
+
+export function IconParqueo(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <path d="M12 3.2 18.5 6v5.2c0 4.6-2.9 7.7-6.5 9-3.6-1.3-6.5-4.4-6.5-9V6L12 3.2z" />
+      <path d="M9.8 15.5V8.7h2.6a2.1 2.1 0 0 1 0 4.2H9.8" />
+    </Base>
+  )
+}
+
 export function IconBandera(props: SVGProps<SVGSVGElement>) {
   return (
     <Base {...props}>

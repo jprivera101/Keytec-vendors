@@ -1,7 +1,9 @@
 import { supabase } from './supabaseClient'
 import type {
   CountryCode,
+  Deposito,
   GasolinaRegistro,
+  ParkingSpot,
   Profile,
   ResumenAdmin,
   Sale,
@@ -185,6 +187,99 @@ export async function obtenerVentasEnvioDeSemana(weekId: string): Promise<VentaE
   return data
 }
 
+// Depositos --------------------------------------------------------------
+
+export async function crearDeposito(salesmanId: string, photoPath: string): Promise<Deposito> {
+  const { data, error } = await supabase
+    .from('deposits')
+    .insert({ salesman_id: salesmanId, photo_path: photoPath })
+    .select('*')
+    .single()
+  if (error) throw error
+  return data
+}
+
+/** Depósitos de un vendedor en un rango de fechas (usado tanto para el resumen semanal del
+ * propio vendedor como, filtrado por varios ids, para la vista de administración). */
+export async function obtenerDepositosDeVendedorEnRango(
+  salesmanId: string,
+  desde: string,
+  hasta: string,
+): Promise<Deposito[]> {
+  const { data, error } = await supabase
+    .from('deposits')
+    .select('*')
+    .eq('salesman_id', salesmanId)
+    .gte('created_at', desde)
+    .lt('created_at', hasta)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function obtenerDepositosDeVendedoresEnRango(
+  salesmanIds: string[],
+  desde: string,
+  hasta: string,
+): Promise<Deposito[]> {
+  if (salesmanIds.length === 0) return []
+  const { data, error } = await supabase
+    .from('deposits')
+    .select('*')
+    .in('salesman_id', salesmanIds)
+    .gte('created_at', desde)
+    .lt('created_at', hasta)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+// Parqueo ------------------------------------------------------------
+
+export async function obtenerParqueoAbierto(salesmanId: string): Promise<ParkingSpot | null> {
+  const { data, error } = await supabase
+    .from('parking_spots')
+    .select('*')
+    .eq('salesman_id', salesmanId)
+    .is('ended_at', null)
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
+export async function crearParqueo(input: {
+  week_id: string
+  salesman_id: string
+  latitude: number
+  longitude: number
+  car_photo_path: string
+}): Promise<ParkingSpot> {
+  const { data, error } = await supabase.from('parking_spots').insert(input).select('*').single()
+  if (error) throw error
+  return data
+}
+
+export async function cerrarParqueo(id: string, receiptPhotoPath: string): Promise<ParkingSpot> {
+  const { data, error } = await supabase
+    .from('parking_spots')
+    .update({ receipt_photo_path: receiptPhotoPath, ended_at: new Date().toISOString() })
+    .eq('id', id)
+    .select('*')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function obtenerParqueosDeSemana(weekId: string): Promise<ParkingSpot[]> {
+  const { data, error } = await supabase
+    .from('parking_spots')
+    .select('*')
+    .eq('week_id', weekId)
+    .order('started_at', { ascending: true })
+  if (error) throw error
+  return data
+}
+
 // Administracion ---------------------------------------------------
 
 export async function obtenerVendedores(
@@ -226,7 +321,12 @@ export async function obtenerSemanasDeVendedor(salesmanId: string): Promise<Week
 
 export async function actualizarVendedor(
   id: string,
-  input: { full_name: string; phone: string | null; route_id?: string },
+  input: {
+    full_name: string
+    phone: string | null
+    route_id?: string
+    km_per_gallon?: number | null
+  },
 ): Promise<void> {
   const { error } = await supabase.from('profiles').update(input).eq('id', id)
   if (error) throw error

@@ -11,6 +11,7 @@ import { FinalizarSemanaModal } from './FinalizarSemanaModal'
 import { NuevaVisitaModal } from './NuevaVisitaModal'
 import { NuevaGasolinaModal } from './NuevaGasolinaModal'
 import { NuevaVentaEnvioModal } from './NuevaVentaEnvioModal'
+import { NuevoDepositoModal } from './NuevoDepositoModal'
 import { IconBandera, IconRuta, IconTiendas } from '../../components/icons'
 
 export function PanelVendedor() {
@@ -23,6 +24,7 @@ export function PanelVendedor() {
   const [modalVisita, setModalVisita] = useState(false)
   const [modalGasolina, setModalGasolina] = useState(false)
   const [modalEnvio, setModalEnvio] = useState(false)
+  const [modalDeposito, setModalDeposito] = useState(false)
 
   const semanaQuery = useQuery({
     queryKey: ['semana-activa', userId],
@@ -122,12 +124,15 @@ export function PanelVendedor() {
             <IconTiendas width={20} height={20} /> Registrar visita a tienda
           </button>
 
-          <div className="grid grid-cols-2 gap-3">
-            <button type="button" onClick={() => setModalEnvio(true)} className="btn-secondary py-3">
-              📦 Venta por envío
+          <div className="grid grid-cols-3 gap-2">
+            <button type="button" onClick={() => setModalEnvio(true)} className="btn-secondary py-3 text-sm">
+              📦 Envío
             </button>
-            <button type="button" onClick={() => setModalGasolina(true)} className="btn-secondary py-3">
+            <button type="button" onClick={() => setModalGasolina(true)} className="btn-secondary py-3 text-sm">
               ⛽ Gasolina
+            </button>
+            <button type="button" onClick={() => setModalDeposito(true)} className="btn-secondary py-3 text-sm">
+              💰 Depósito
             </button>
           </div>
 
@@ -192,6 +197,18 @@ export function PanelVendedor() {
           onCreada={() => {
             setModalEnvio(false)
             queryClient.invalidateQueries({ queryKey: ['ventas-envio', semana.id] })
+          }}
+        />
+      )}
+
+      {semana && (
+        <NuevoDepositoModal
+          abierto={modalDeposito}
+          userId={userId}
+          onCerrar={() => setModalDeposito(false)}
+          onCreado={() => {
+            setModalDeposito(false)
+            queryClient.invalidateQueries({ queryKey: ['depositos'] })
           }}
         />
       )}

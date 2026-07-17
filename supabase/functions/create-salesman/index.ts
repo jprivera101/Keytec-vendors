@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { email, password, full_name, phone, route_id } = body ?? {};
+    const { email, password, full_name, phone, route_id, km_per_gallon } = body ?? {};
     let { country } = body ?? {};
 
     if (!email || !password || !full_name) {
@@ -103,6 +103,7 @@ Deno.serve(async (req) => {
       role: "salesman",
       country,
       route_id,
+      km_per_gallon: km_per_gallon ?? null,
     });
 
     if (insertError) {

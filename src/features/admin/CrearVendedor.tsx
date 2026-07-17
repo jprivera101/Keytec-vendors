@@ -18,6 +18,7 @@ export function FormularioCrearVendedor({ onCreado, mostrarSelectorPais, paisPre
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
+  const [kmPerGallon, setKmPerGallon] = useState('')
   const [password, setPassword] = useState('')
   const [country, setCountry] = useState<CountryCode | ''>(paisPredeterminado ?? '')
   const [regionId, setRegionId] = useState('')
@@ -67,6 +68,7 @@ export function FormularioCrearVendedor({ onCreado, mostrarSelectorPais, paisPre
           phone: phone || undefined,
           country: country || undefined,
           route_id: finalRegionId,
+          km_per_gallon: kmPerGallon ? Number(kmPerGallon) : undefined,
         },
       })
       if (error) throw error
@@ -76,6 +78,7 @@ export function FormularioCrearVendedor({ onCreado, mostrarSelectorPais, paisPre
       setFullName('')
       setEmail('')
       setPhone('')
+      setKmPerGallon('')
       setPassword('')
       setRegionId('')
       setNuevaRegionNombre('')
@@ -113,6 +116,21 @@ export function FormularioCrearVendedor({ onCreado, mostrarSelectorPais, paisPre
         <input
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
+          className="input-field"
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-sm font-medium text-slate-700">
+          Rendimiento (km por galón, opcional)
+        </label>
+        <input
+          type="number"
+          inputMode="decimal"
+          step="0.1"
+          min="0"
+          value={kmPerGallon}
+          onChange={(e) => setKmPerGallon(e.target.value)}
+          placeholder="Ej. 35"
           className="input-field"
         />
       </div>

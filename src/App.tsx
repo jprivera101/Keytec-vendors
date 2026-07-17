@@ -13,6 +13,7 @@ import { VendedoresAdmin } from './features/admin/VendedoresAdmin'
 import { AnaliticaAdmin } from './features/admin/AnaliticaAdmin'
 import { RolesAdmin } from './features/admin/RolesAdmin'
 import { TiendasAdmin } from './features/admin/TiendasAdmin'
+import { DepositosAdmin } from './features/admin/DepositosAdmin'
 import { OperarioLayout } from './features/operario/OperarioLayout'
 import { PanelOperario } from './features/operario/PanelOperario'
 
@@ -54,6 +55,7 @@ export default function App() {
         <Route path="vendedores" element={<VendedoresAdmin />} />
         <Route path="tiendas/:storeId?" element={<TiendasAdmin />} />
         <Route path="analitica/:salesmanId?/:weekId?" element={<AnaliticaAdmin />} />
+        <Route path="depositos" element={<DepositosAdmin />} />
         <Route path="roles" element={<RolesAdmin />} />
       </Route>
 

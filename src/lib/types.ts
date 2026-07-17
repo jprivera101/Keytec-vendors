@@ -10,6 +10,8 @@ export interface Profile {
   active: boolean
   country: CountryCode | null
   route_id: string | null
+  /** Rendimiento de combustible declarado (km por galon); opcional. */
+  km_per_gallon: number | null
   created_at: string
 }
 
@@ -122,6 +124,33 @@ export interface ResumenAdmin {
   /** Total vendido por país (nunca se suman Quetzales con Dólares). */
   ventasEnRutaPorPais: Partial<Record<CountryCode, number>>
   ventasPorVendedor: { nombre: string; total: number; country: CountryCode | null }[]
+}
+
+/** Foto de un deposito de efectivo hecho por el vendedor; sin monto, solo evidencia. */
+export interface Deposito {
+  id: string
+  salesman_id: string
+  photo_path: string
+  created_at: string
+}
+
+/** Depósito combinado con el vendedor que lo hizo, usado en la vista de administración. */
+export interface DepositoConVendedor extends Deposito {
+  vendedorNombre: string
+  country: CountryCode | null
+  region_name: string | null
+}
+
+export interface ParkingSpot {
+  id: string
+  week_id: string
+  salesman_id: string
+  latitude: number
+  longitude: number
+  car_photo_path: string
+  receipt_photo_path: string | null
+  started_at: string
+  ended_at: string | null
 }
 
 export interface TiendaConLugar extends Store {

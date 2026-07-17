@@ -203,6 +203,7 @@ function ModalEditarVendedor({
 }) {
   const [fullName, setFullName] = useState(vendedor.full_name)
   const [phone, setPhone] = useState(vendedor.phone ?? '')
+  const [kmPerGallon, setKmPerGallon] = useState(vendedor.km_per_gallon?.toString() ?? '')
   const [regionId, setRegionId] = useState(vendedor.route_id ?? '')
   const [nuevaRegionNombre, setNuevaRegionNombre] = useState('')
   const [enviando, setEnviando] = useState(false)
@@ -242,6 +243,7 @@ function ModalEditarVendedor({
         full_name: fullName.trim(),
         phone: phone.trim() || null,
         route_id: finalRegionId,
+        km_per_gallon: kmPerGallon ? Number(kmPerGallon) : null,
       })
       onGuardado()
     } catch (e) {
@@ -267,6 +269,21 @@ function ModalEditarVendedor({
           <input
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
+            className="input-field"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            Rendimiento (km por galón)
+          </label>
+          <input
+            type="number"
+            inputMode="decimal"
+            step="0.1"
+            min="0"
+            value={kmPerGallon}
+            onChange={(e) => setKmPerGallon(e.target.value)}
+            placeholder="Ej. 35"
             className="input-field"
           />
         </div>
