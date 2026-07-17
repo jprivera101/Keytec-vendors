@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { actualizarVendedor, esUsernameDuplicado, establecerVendedorActivo, obtenerVendedores } from '../../lib/api'
+import { actualizarVendedor, establecerVendedorActivo, obtenerVendedores } from '../../lib/api'
 import { obtenerOperariosPorVendedor } from '../../lib/operarios'
 import { obtenerRegionesPorPais, crearRegion } from '../../lib/regiones'
 import { Spinner } from '../../components/Spinner'
@@ -204,7 +204,6 @@ function ModalEditarVendedor({
   onGuardado: () => void
 }) {
   const [fullName, setFullName] = useState(vendedor.full_name)
-  const [username, setUsername] = useState(vendedor.username ?? '')
   const [phone, setPhone] = useState(vendedor.phone ?? '')
   const [kmPerGallon, setKmPerGallon] = useState(vendedor.km_per_gallon?.toString() ?? '')
   const [regionId, setRegionId] = useState(vendedor.route_id ?? '')
@@ -221,10 +220,6 @@ function ModalEditarVendedor({
   async function guardar() {
     if (!fullName.trim()) {
       setError('El nombre no puede estar vacío')
-      return
-    }
-    if (!/^[a-z0-9._-]{3,32}$/.test(username)) {
-      setError('El usuario debe tener 3-32 caracteres: minúsculas, números, punto, guion o guion bajo')
       return
     }
     if (!regionId) {
@@ -248,14 +243,13 @@ function ModalEditarVendedor({
       }
       await actualizarVendedor(vendedor.id, {
         full_name: fullName.trim(),
-        username,
         phone: phone.trim() || null,
         route_id: finalRegionId,
         km_per_gallon: kmPerGallon ? Number(kmPerGallon) : null,
       })
       onGuardado()
     } catch (e) {
-      setError(esUsernameDuplicado(e) ? 'Ese nombre de usuario ya está en uso' : (e as Error).message)
+      setError((e as Error).message)
     } finally {
       setEnviando(false)
     }
@@ -274,12 +268,10 @@ function ModalEditarVendedor({
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Usuario (para iniciar sesión)</label>
-          <input
-            value={username}
-            onChange={(e) => setUsername(e.target.value.toLowerCase())}
-            className="input-field"
-            autoCapitalize="none"
-          />
+          <p className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-500">
+            {vendedor.username ?? '—'}
+          </p>
+          <p className="mt-1 text-xs text-slate-400">El usuario no se puede cambiar una vez asignado.</p>
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Teléfono</label>
