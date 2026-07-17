@@ -65,6 +65,7 @@ export function AdminsAdmin({ mostrarEncabezado = true }: { mostrarEncabezado?: 
           <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
             <tr>
               <th className="px-4 py-3 font-medium">Nombre</th>
+              <th className="px-4 py-3 font-medium">Usuario</th>
               <th className="px-4 py-3 font-medium">País</th>
               <th className="px-4 py-3 font-medium">Teléfono</th>
               <th className="px-4 py-3 font-medium">Estado</th>
@@ -75,6 +76,7 @@ export function AdminsAdmin({ mostrarEncabezado = true }: { mostrarEncabezado?: 
             {adminsQuery.data?.map((admin) => (
               <tr key={admin.id} className={admin.active ? '' : 'opacity-50'}>
                 <td className="px-4 py-3 font-medium text-slate-900">{admin.full_name}</td>
+                <td className="px-4 py-3 text-slate-500">{admin.username ?? '—'}</td>
                 <td className="px-4 py-3 text-slate-500">
                   {admin.country ? NOMBRE_PAIS[admin.country] : '—'}
                 </td>
@@ -115,7 +117,7 @@ export function AdminsAdmin({ mostrarEncabezado = true }: { mostrarEncabezado?: 
             ))}
             {adminsQuery.data?.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-sm text-slate-400">
+                <td colSpan={6} className="px-4 py-6 text-center text-sm text-slate-400">
                   No hay admins de país registrados todavía.
                 </td>
               </tr>
@@ -139,6 +141,7 @@ export function AdminsAdmin({ mostrarEncabezado = true }: { mostrarEncabezado?: 
 
 function FormularioCrearAdmin({ onCreado }: { onCreado: () => void }) {
   const [fullName, setFullName] = useState('')
+  const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
@@ -153,18 +156,23 @@ function FormularioCrearAdmin({ onCreado }: { onCreado: () => void }) {
       setError('Selecciona el país')
       return
     }
+    if (!/^[a-z0-9._-]{3,32}$/.test(username)) {
+      setError('El usuario debe tener 3-32 caracteres: minúsculas, números, punto, guion o guion bajo')
+      return
+    }
     setError(null)
     setExito(null)
     setEnviando(true)
     try {
       const { data, error } = await supabase.functions.invoke('create-admin', {
-        body: { email, password, full_name: fullName, phone: phone || undefined, country },
+        body: { email, password, full_name: fullName, username, phone: phone || undefined, country },
       })
       if (error) throw error
       if (data?.error) throw new Error(data.error)
 
-      setExito(`Admin "${fullName}" creado. Comparte con él su correo y contraseña.`)
+      setExito(`Admin "${fullName}" creado. Comparte con él su usuario (${username}) y contraseña.`)
       setFullName('')
+      setUsername('')
       setEmail('')
       setPhone('')
       setPassword('')
@@ -186,6 +194,17 @@ function FormularioCrearAdmin({ onCreado }: { onCreado: () => void }) {
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
           className="input-field"
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-sm font-medium text-slate-700">Usuario (para iniciar sesión)</label>
+        <input
+          required
+          value={username}
+          onChange={(e) => setUsername(e.target.value.toLowerCase())}
+          placeholder="Ej. jperez"
+          className="input-field"
+          autoCapitalize="none"
         />
       </div>
       <div>

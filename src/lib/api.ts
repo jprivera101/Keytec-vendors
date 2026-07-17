@@ -15,6 +15,25 @@ import type {
   Week,
 } from './types'
 
+// Autenticacion por username -------------------------------------------
+
+/** Traduce un username al correo real (lo que Supabase Auth necesita para iniciar sesion),
+ * via una funcion de base de datos callable de forma anonima. Devuelve null si no existe. */
+export async function resolverEmailDeUsername(username: string): Promise<string | null> {
+  const { data, error } = await supabase.rpc('resolver_email_de_username', {
+    nombre_usuario: username,
+  })
+  if (error) throw error
+  return data
+}
+
+/** El indice unico de profiles.username usa el codigo estandar de Postgres para violacion de
+ * unicidad (23505); esto evita mostrar un error crudo de base de datos en el formulario. */
+export function esUsernameDuplicado(error: unknown): boolean {
+  const err = error as { code?: string; message?: string } | null
+  return err?.code === '23505' || !!err?.message?.toLowerCase().includes('duplicate key')
+}
+
 // Semanas ------------------------------------------------------------
 
 export async function obtenerSemanaActiva(salesmanId: string): Promise<Week | null> {
@@ -326,6 +345,7 @@ export async function actualizarVendedor(
     phone: string | null
     route_id?: string
     km_per_gallon?: number | null
+    username?: string
   },
 ): Promise<void> {
   const { error } = await supabase.from('profiles').update(input).eq('id', id)

@@ -1,13 +1,16 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../../lib/useAuth'
+import { resolverEmailDeUsername } from '../../lib/api'
 import { Logo } from '../../components/Logo'
 import { PoweredByPenthouse } from '../../components/PoweredByPenthouse'
 import { RUTA_POR_ROL } from './RutaProtegida'
 
+const ERROR_GENERICO = 'Usuario o contraseña incorrectos'
+
 export function Login() {
   const { session, profile, cargando, authError, iniciarSesion } = useAuth()
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
@@ -20,9 +23,19 @@ export function Login() {
     e.preventDefault()
     setError(null)
     setEnviando(true)
-    const { error } = await iniciarSesion(email, password)
-    setEnviando(false)
-    if (error) setError(error)
+    try {
+      const email = await resolverEmailDeUsername(username.trim().toLowerCase())
+      if (!email) {
+        setError(ERROR_GENERICO)
+        return
+      }
+      const { error } = await iniciarSesion(email, password)
+      if (error) setError(ERROR_GENERICO)
+    } catch {
+      setError(ERROR_GENERICO)
+    } finally {
+      setEnviando(false)
+    }
   }
 
   return (
@@ -35,14 +48,16 @@ export function Login() {
 
         <form onSubmit={manejarEnvio} className="space-y-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Correo</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Usuario</label>
             <input
-              type="email"
+              type="text"
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               className="input-field text-base"
               autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
             />
           </div>
           <div>

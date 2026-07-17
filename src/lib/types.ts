@@ -12,6 +12,8 @@ export interface Profile {
   route_id: string | null
   /** Rendimiento de combustible declarado (km por galon); opcional. */
   km_per_gallon: number | null
+  /** Nombre de usuario con el que inicia sesion (unico, sin importar mayusculas). */
+  username: string | null
   created_at: string
 }
 

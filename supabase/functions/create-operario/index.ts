@@ -3,6 +3,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeadersFor } from "../_shared/cors.ts";
 import { registrarAuditoria } from "../_shared/auditLog.ts";
+import { normalizarUsername, esViolacionDeUnicidad } from "../_shared/username.ts";
 
 Deno.serve(async (req) => {
   const cors = corsHeadersFor(req);
@@ -66,6 +67,13 @@ Deno.serve(async (req) => {
         400,
       );
     }
+    const username = normalizarUsername(body?.username);
+    if (!username) {
+      return jsonResponse(
+        { error: "username es requerido (3-32 caracteres: letras, números, punto, guion o guion bajo)" },
+        400,
+      );
+    }
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
@@ -85,10 +93,14 @@ Deno.serve(async (req) => {
       phone: phone ?? null,
       role: "operario",
       country: null,
+      username,
     });
 
     if (insertError) {
       await adminClient.auth.admin.deleteUser(created.user.id);
+      if (esViolacionDeUnicidad(insertError)) {
+        return jsonResponse({ error: "Ese nombre de usuario ya está en uso" }, 409);
+      }
       return jsonResponse({ error: insertError.message }, 400);
     }
 

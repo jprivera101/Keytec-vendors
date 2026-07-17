@@ -3,6 +3,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeadersFor } from "../_shared/cors.ts";
 import { registrarAuditoria } from "../_shared/auditLog.ts";
+import { normalizarUsername, esViolacionDeUnicidad } from "../_shared/username.ts";
 
 const PAISES_VALIDOS = ["GT", "SV"];
 
@@ -68,6 +69,13 @@ Deno.serve(async (req) => {
     if (!route_id) {
       return jsonResponse({ error: "route_id (región) es requerido" }, 400);
     }
+    const username = normalizarUsername(body?.username);
+    if (!username) {
+      return jsonResponse(
+        { error: "username es requerido (3-32 caracteres: letras, números, punto, guion o guion bajo)" },
+        400,
+      );
+    }
 
     if (callerProfile.role === "admin") {
       // Un admin de pais solo puede crear vendedores de su propio pais,
@@ -109,11 +117,15 @@ Deno.serve(async (req) => {
       country,
       route_id,
       km_per_gallon: km_per_gallon ?? null,
+      username,
     });
 
     if (insertError) {
       // Revertir: no dejar un usuario de auth huerfano sin perfil.
       await adminClient.auth.admin.deleteUser(created.user.id);
+      if (esViolacionDeUnicidad(insertError)) {
+        return jsonResponse({ error: "Ese nombre de usuario ya está en uso" }, 409);
+      }
       return jsonResponse({ error: insertError.message }, 400);
     }
 

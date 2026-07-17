@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { actualizarVendedor, establecerVendedorActivo, obtenerVendedores } from '../../lib/api'
+import { actualizarVendedor, esUsernameDuplicado, establecerVendedorActivo, obtenerVendedores } from '../../lib/api'
 import { obtenerOperariosPorVendedor } from '../../lib/operarios'
 import { obtenerRegionesPorPais, crearRegion } from '../../lib/regiones'
 import { Spinner } from '../../components/Spinner'
@@ -80,6 +80,7 @@ export function VendedoresAdmin({ mostrarEncabezado = true }: { mostrarEncabezad
           <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
             <tr>
               <th className="px-4 py-3 font-medium">Nombre</th>
+              <th className="px-4 py-3 font-medium">Usuario</th>
               {pais === 'ALL' && <th className="px-4 py-3 font-medium">País</th>}
               <th className="px-4 py-3 font-medium">Región</th>
               <th className="px-4 py-3 font-medium">Teléfono</th>
@@ -97,6 +98,7 @@ export function VendedoresAdmin({ mostrarEncabezado = true }: { mostrarEncabezad
                     {vendedor.full_name}
                   </Link>
                 </td>
+                <td className="px-4 py-3 text-slate-500">{vendedor.username ?? '—'}</td>
                 {pais === 'ALL' && (
                   <td className="px-4 py-3 text-slate-500">
                     {vendedor.country ? NOMBRE_PAIS[vendedor.country] : '—'}
@@ -155,7 +157,7 @@ export function VendedoresAdmin({ mostrarEncabezado = true }: { mostrarEncabezad
             ))}
             {vendedoresQuery.data?.length === 0 && (
               <tr>
-                <td colSpan={pais === 'ALL' ? 8 : 7} className="px-4 py-6 text-center text-sm text-slate-400">
+                <td colSpan={pais === 'ALL' ? 9 : 8} className="px-4 py-6 text-center text-sm text-slate-400">
                   No hay vendedores registrados todavía.
                 </td>
               </tr>
@@ -202,6 +204,7 @@ function ModalEditarVendedor({
   onGuardado: () => void
 }) {
   const [fullName, setFullName] = useState(vendedor.full_name)
+  const [username, setUsername] = useState(vendedor.username ?? '')
   const [phone, setPhone] = useState(vendedor.phone ?? '')
   const [kmPerGallon, setKmPerGallon] = useState(vendedor.km_per_gallon?.toString() ?? '')
   const [regionId, setRegionId] = useState(vendedor.route_id ?? '')
@@ -218,6 +221,10 @@ function ModalEditarVendedor({
   async function guardar() {
     if (!fullName.trim()) {
       setError('El nombre no puede estar vacío')
+      return
+    }
+    if (!/^[a-z0-9._-]{3,32}$/.test(username)) {
+      setError('El usuario debe tener 3-32 caracteres: minúsculas, números, punto, guion o guion bajo')
       return
     }
     if (!regionId) {
@@ -241,13 +248,14 @@ function ModalEditarVendedor({
       }
       await actualizarVendedor(vendedor.id, {
         full_name: fullName.trim(),
+        username,
         phone: phone.trim() || null,
         route_id: finalRegionId,
         km_per_gallon: kmPerGallon ? Number(kmPerGallon) : null,
       })
       onGuardado()
     } catch (e) {
-      setError((e as Error).message)
+      setError(esUsernameDuplicado(e) ? 'Ese nombre de usuario ya está en uso' : (e as Error).message)
     } finally {
       setEnviando(false)
     }
@@ -262,6 +270,15 @@ function ModalEditarVendedor({
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
             className="input-field"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Usuario (para iniciar sesión)</label>
+          <input
+            value={username}
+            onChange={(e) => setUsername(e.target.value.toLowerCase())}
+            className="input-field"
+            autoCapitalize="none"
           />
         </div>
         <div>

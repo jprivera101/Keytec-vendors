@@ -16,6 +16,7 @@ interface Props {
 
 export function FormularioCrearVendedor({ onCreado, mostrarSelectorPais, paisPredeterminado }: Props) {
   const [fullName, setFullName] = useState('')
+  const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [kmPerGallon, setKmPerGallon] = useState('')
@@ -47,6 +48,10 @@ export function FormularioCrearVendedor({ onCreado, mostrarSelectorPais, paisPre
       setError('Ingresa el nombre de la nueva región')
       return
     }
+    if (!/^[a-z0-9._-]{3,32}$/.test(username)) {
+      setError('El usuario debe tener 3-32 caracteres: minúsculas, números, punto, guion o guion bajo')
+      return
+    }
     setError(null)
     setExito(null)
     setEnviando(true)
@@ -65,6 +70,7 @@ export function FormularioCrearVendedor({ onCreado, mostrarSelectorPais, paisPre
           email,
           password,
           full_name: fullName,
+          username,
           phone: phone || undefined,
           country: country || undefined,
           route_id: finalRegionId,
@@ -74,8 +80,9 @@ export function FormularioCrearVendedor({ onCreado, mostrarSelectorPais, paisPre
       if (error) throw error
       if (data?.error) throw new Error(data.error)
 
-      setExito(`Vendedor "${fullName}" creado. Comparte con él su correo y contraseña.`)
+      setExito(`Vendedor "${fullName}" creado. Comparte con él su usuario (${username}) y contraseña.`)
       setFullName('')
+      setUsername('')
       setEmail('')
       setPhone('')
       setKmPerGallon('')
@@ -99,6 +106,17 @@ export function FormularioCrearVendedor({ onCreado, mostrarSelectorPais, paisPre
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
           className="input-field"
+        />
+      </div>
+      <div>
+        <label className="mb-1 block text-sm font-medium text-slate-700">Usuario (para iniciar sesión)</label>
+        <input
+          required
+          value={username}
+          onChange={(e) => setUsername(e.target.value.toLowerCase())}
+          placeholder="Ej. jperez"
+          className="input-field"
+          autoCapitalize="none"
         />
       </div>
       <div>

@@ -69,6 +69,7 @@ export function OperariosAdmin({ mostrarEncabezado = true }: { mostrarEncabezado
           <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
             <tr>
               <th className="px-4 py-3 font-medium">Nombre</th>
+              <th className="px-4 py-3 font-medium">Usuario</th>
               <th className="px-4 py-3 font-medium">Teléfono</th>
               <th className="px-4 py-3 font-medium">Vendedores asignados</th>
               <th className="px-4 py-3 font-medium">Estado</th>
@@ -79,6 +80,7 @@ export function OperariosAdmin({ mostrarEncabezado = true }: { mostrarEncabezado
             {operariosQuery.data?.map((operario) => (
               <tr key={operario.id} className={operario.active ? '' : 'opacity-50'}>
                 <td className="px-4 py-3 font-medium text-slate-900">{operario.full_name}</td>
+                <td className="px-4 py-3 text-slate-500">{operario.username ?? '—'}</td>
                 <td className="px-4 py-3 text-slate-500">{operario.phone || '—'}</td>
                 <td className="px-4 py-3 text-slate-500">
                   {operario.asignados} vendedor{operario.asignados !== 1 && 'es'}
@@ -126,7 +128,7 @@ export function OperariosAdmin({ mostrarEncabezado = true }: { mostrarEncabezado
             ))}
             {operariosQuery.data?.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-sm text-slate-400">
+                <td colSpan={6} className="px-4 py-6 text-center text-sm text-slate-400">
                   No hay operarios registrados todavía.
                 </td>
               </tr>
@@ -161,6 +163,7 @@ export function OperariosAdmin({ mostrarEncabezado = true }: { mostrarEncabezado
 
 function FormularioCrearOperario({ onCreado }: { onCreado: () => void }) {
   const [fullName, setFullName] = useState('')
+  const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
@@ -177,18 +180,30 @@ function FormularioCrearOperario({ onCreado }: { onCreado: () => void }) {
       setError('Selecciona al menos un vendedor para asignarle')
       return
     }
+    if (!/^[a-z0-9._-]{3,32}$/.test(username)) {
+      setError('El usuario debe tener 3-32 caracteres: minúsculas, números, punto, guion o guion bajo')
+      return
+    }
     setError(null)
     setExito(null)
     setEnviando(true)
     try {
       const { data, error } = await supabase.functions.invoke('create-operario', {
-        body: { email, password, full_name: fullName, phone: phone || undefined, salesman_ids: seleccionados },
+        body: {
+          email,
+          password,
+          full_name: fullName,
+          username,
+          phone: phone || undefined,
+          salesman_ids: seleccionados,
+        },
       })
       if (error) throw error
       if (data?.error) throw new Error(data.error)
 
-      setExito(`Operario "${fullName}" creado. Comparte con él su correo y contraseña.`)
+      setExito(`Operario "${fullName}" creado. Comparte con él su usuario (${username}) y contraseña.`)
       setFullName('')
+      setUsername('')
       setEmail('')
       setPhone('')
       setPassword('')
@@ -206,6 +221,17 @@ function FormularioCrearOperario({ onCreado }: { onCreado: () => void }) {
       <div>
         <label className="mb-1 block text-sm font-medium text-slate-700">Nombre completo</label>
         <input required value={fullName} onChange={(e) => setFullName(e.target.value)} className="input-field" />
+      </div>
+      <div>
+        <label className="mb-1 block text-sm font-medium text-slate-700">Usuario (para iniciar sesión)</label>
+        <input
+          required
+          value={username}
+          onChange={(e) => setUsername(e.target.value.toLowerCase())}
+          placeholder="Ej. jperez"
+          className="input-field"
+          autoCapitalize="none"
+        />
       </div>
       <div>
         <label className="mb-1 block text-sm font-medium text-slate-700">Correo</label>
