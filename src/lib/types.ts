@@ -14,6 +14,8 @@ export interface Profile {
   km_per_gallon: number | null
   /** Nombre de usuario con el que inicia sesion (unico, sin importar mayusculas). */
   username: string | null
+  /** Si puede usar la funcion de marcar parqueo; algunos vendedores no la necesitan. */
+  parking_enabled: boolean
   /** true si la contraseña actual es temporal (recien creada o restablecida) y debe
    * reemplazarse antes de dejar usar el resto de la app. */
   must_change_password: boolean
@@ -119,6 +121,9 @@ export interface VentaEnvio {
   client_name: string
   amount: number
   photo_path: string | null
+  processed: boolean
+  processed_at: string | null
+  processed_by: string | null
   created_at: string
 }
 

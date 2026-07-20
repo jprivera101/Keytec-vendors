@@ -208,6 +208,7 @@ function ModalEditarVendedor({
   const [fullName, setFullName] = useState(vendedor.full_name)
   const [phone, setPhone] = useState(vendedor.phone ?? '')
   const [kmPerGallon, setKmPerGallon] = useState(vendedor.km_per_gallon?.toString() ?? '')
+  const [parkingEnabled, setParkingEnabled] = useState(vendedor.parking_enabled)
   const [regionId, setRegionId] = useState(vendedor.route_id ?? '')
   const [nuevaRegionNombre, setNuevaRegionNombre] = useState('')
   const [enviando, setEnviando] = useState(false)
@@ -248,6 +249,7 @@ function ModalEditarVendedor({
         phone: phone.trim() || null,
         route_id: finalRegionId,
         km_per_gallon: kmPerGallon ? Number(kmPerGallon) : null,
+        parking_enabled: parkingEnabled,
       })
       onGuardado()
     } catch (e) {
@@ -298,6 +300,15 @@ function ModalEditarVendedor({
             className="input-field"
           />
         </div>
+        <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-700">
+          <input
+            type="checkbox"
+            checked={parkingEnabled}
+            onChange={(e) => setParkingEnabled(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 text-brand-700 focus:ring-brand-600/40"
+          />
+          Puede usar la función de parqueo
+        </label>
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Región</label>
           <select

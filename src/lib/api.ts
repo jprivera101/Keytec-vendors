@@ -354,6 +354,7 @@ export async function actualizarVendedor(
     route_id?: string
     km_per_gallon?: number | null
     username?: string
+    parking_enabled?: boolean
   },
 ): Promise<void> {
   const { error } = await supabase.from('profiles').update(input).eq('id', id)

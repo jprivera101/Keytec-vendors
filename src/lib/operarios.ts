@@ -95,8 +95,11 @@ export async function obtenerVendedoresAsignados(operarioId: string): Promise<Pr
 
 // Ventas para procesar --------------------------------------------------
 
+/** `origen` distingue de qué tabla viene (sales vs shipment_sales): marcarVentaProcesada
+ * necesita saberlo para actualizar la tabla correcta. */
 export interface VentaOperario {
   id: string
+  origen: 'venta' | 'envio'
   amount: number
   photoPath: string | null
   createdAt: string
@@ -126,25 +129,54 @@ interface FilaVentaOperario {
   } | null
 }
 
+interface FilaEnvioOperario {
+  id: string
+  amount: number
+  photo_path: string | null
+  created_at: string
+  processed: boolean
+  client_name: string
+  weeks: {
+    id: string
+    status: WeekStatus
+    salesman_id: string
+    profiles: { full_name: string; country: CountryCode | null } | null
+  } | null
+}
+
 /** Todas las ventas visibles para el operario actual (la RLS ya las limita a sus vendedores
  * asignados); el filtrado por vendedor/semana/estado se hace en el cliente. Se filtra por
  * semana activa vs. anteriores en vez de "hoy" (fecha) porque comparar fechas de calendario
- * cerca de medianoche en la zona horaria local resultó frágil y confuso. */
+ * cerca de medianoche en la zona horaria local resultó frágil y confuso.
+ *
+ * Incluye tanto "sales" (ligadas a una visita/tienda) como "shipment_sales" (ventas por
+ * envío, sin tienda): antes solo se traían las primeras, así que una venta por envío nunca
+ * le aparecía al operario para procesarla en el CRM. */
 export async function obtenerVentasOperario(): Promise<VentaOperario[]> {
-  const { data, error } = await supabase
-    .from('sales')
-    .select(
-      'id, amount, photo_path, created_at, processed, visits(store_name, weeks(id, status, salesman_id, profiles(full_name, country)))',
-    )
-    .order('created_at', { ascending: false })
-  if (error) throw error
+  const [ventasRes, enviosRes] = await Promise.all([
+    supabase
+      .from('sales')
+      .select(
+        'id, amount, photo_path, created_at, processed, visits(store_name, weeks(id, status, salesman_id, profiles(full_name, country)))',
+      )
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('shipment_sales')
+      .select(
+        'id, amount, photo_path, created_at, processed, client_name, weeks(id, status, salesman_id, profiles(full_name, country))',
+      )
+      .order('created_at', { ascending: false }),
+  ])
+  if (ventasRes.error) throw ventasRes.error
+  if (enviosRes.error) throw enviosRes.error
 
-  return ((data ?? []) as unknown as FilaVentaOperario[]).flatMap((fila) => {
+  const ventas: VentaOperario[] = ((ventasRes.data ?? []) as unknown as FilaVentaOperario[]).flatMap((fila) => {
     const semana = fila.visits?.weeks
     if (!semana) return []
     return [
       {
         id: fila.id,
+        origen: 'venta' as const,
         amount: Number(fila.amount),
         photoPath: fila.photo_path,
         createdAt: fila.created_at,
@@ -158,6 +190,31 @@ export async function obtenerVentasOperario(): Promise<VentaOperario[]> {
       },
     ]
   })
+
+  const envios: VentaOperario[] = ((enviosRes.data ?? []) as unknown as FilaEnvioOperario[]).flatMap((fila) => {
+    const semana = fila.weeks
+    if (!semana) return []
+    return [
+      {
+        id: fila.id,
+        origen: 'envio' as const,
+        amount: Number(fila.amount),
+        photoPath: fila.photo_path,
+        createdAt: fila.created_at,
+        processed: fila.processed,
+        storeName: `📦 ${fila.client_name}`,
+        salesmanId: semana.salesman_id,
+        salesmanName: semana.profiles?.full_name ?? 'Vendedor',
+        country: semana.profiles?.country ?? null,
+        weekId: semana.id,
+        weekStatus: semana.status,
+      },
+    ]
+  })
+
+  return [...ventas, ...envios].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  )
 }
 
 // Depósitos --------------------------------------------------------------
@@ -179,9 +236,10 @@ export async function marcarVentaProcesada(
   saleId: string,
   procesada: boolean,
   operarioId: string,
+  origen: 'venta' | 'envio' = 'venta',
 ): Promise<void> {
   const { error } = await supabase
-    .from('sales')
+    .from(origen === 'envio' ? 'shipment_sales' : 'sales')
     .update({
       processed: procesada,
       processed_at: procesada ? new Date().toISOString() : null,

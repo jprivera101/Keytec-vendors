@@ -54,7 +54,7 @@ export function PanelOperario() {
     setError(null)
     setProcesando(venta.id)
     try {
-      await marcarVentaProcesada(venta.id, procesada, profile!.id)
+      await marcarVentaProcesada(venta.id, procesada, profile!.id, venta.origen)
       await queryClient.invalidateQueries({ queryKey: ['ventas-operario'] })
     } catch (e) {
       setError((e as Error).message)

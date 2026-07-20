@@ -150,7 +150,7 @@ export function ResumenRuta({ weekId, puedeAgregarVenta = false, onAgregarVenta 
                 parkingSpots={parqueos}
                 popupMaxHeight={110}
               />
-              {semana.status === 'active' && (
+              {semana.status === 'active' && profile?.parking_enabled && (
                 <button
                   type="button"
                   onClick={() => setModalParqueo(true)}
