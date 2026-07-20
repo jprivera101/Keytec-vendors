@@ -6,7 +6,7 @@ import { comprimirImagen } from '../../lib/imageCompress'
 import { subirFoto } from '../../lib/storage'
 import { obtenerUbicacion, type Coordenadas } from '../../lib/ubicacion'
 import { obtenerLugaresPorPais, crearLugar } from '../../lib/lugares'
-import { obtenerTiendasPorLugar, crearTienda } from '../../lib/tiendas'
+import { obtenerTiendasPorLugar, crearTienda, actualizarTienda } from '../../lib/tiendas'
 import { crearVisita } from '../../lib/api'
 import { SelectorLugarTienda, NUEVO_LUGAR, NUEVA_TIENDA } from './SelectorLugarTienda'
 import type { CountryCode, Visit } from '../../lib/types'
@@ -26,6 +26,12 @@ export function NuevaVisitaModal({ abierto, weekId, userId, country, onCerrar, o
   const [nuevoLugarNombre, setNuevoLugarNombre] = useState('')
   const [tiendaId, setTiendaId] = useState('')
   const [nuevaTiendaNombre, setNuevaTiendaNombre] = useState('')
+  // Datos del cliente: siempre para una tienda nueva; para una ya existente solo si todavía
+  // no se le completaron (backfill). TEMPORAL: una vez que todas las tiendas activas ya
+  // tengan client_name, se puede quitar el bloque "necesitaCompletarDatos" de este archivo.
+  const [nombreTiendaEditado, setNombreTiendaEditado] = useState('')
+  const [clienteNombre, setClienteNombre] = useState('')
+  const [clienteTelefono, setClienteTelefono] = useState('')
   const [notes, setNotes] = useState('')
   const [ubicacion, setUbicacion] = useState<Coordenadas | null>(null)
   const [buscandoUbicacion, setBuscandoUbicacion] = useState(false)
@@ -45,6 +51,18 @@ export function NuevaVisitaModal({ abierto, weekId, userId, country, onCerrar, o
     enabled: abierto && !!lugarId && lugarId !== NUEVO_LUGAR,
   })
 
+  const creandoTiendaNueva = lugarId === NUEVO_LUGAR || tiendaId === NUEVA_TIENDA
+  const tiendaSeleccionada = tiendasQuery.data?.find((t) => t.id === tiendaId)
+  const necesitaCompletarDatos = !creandoTiendaNueva && !!tiendaSeleccionada && !tiendaSeleccionada.client_name
+
+  function manejarTiendaIdChange(id: string) {
+    setTiendaId(id)
+    const tienda = tiendasQuery.data?.find((t) => t.id === id)
+    setNombreTiendaEditado(tienda?.name ?? '')
+    setClienteNombre(tienda?.client_name ?? '')
+    setClienteTelefono(tienda?.phone ?? '')
+  }
+
   useEffect(() => {
     if (abierto) {
       setArchivo(null)
@@ -52,6 +70,9 @@ export function NuevaVisitaModal({ abierto, weekId, userId, country, onCerrar, o
       setNuevoLugarNombre('')
       setTiendaId('')
       setNuevaTiendaNombre('')
+      setNombreTiendaEditado('')
+      setClienteNombre('')
+      setClienteTelefono('')
       setNotes('')
       setUbicacion(null)
       setError(null)
@@ -100,6 +121,20 @@ export function NuevaVisitaModal({ abierto, weekId, userId, country, onCerrar, o
         return
       }
     }
+    if (creandoTiendaNueva && !clienteNombre.trim()) {
+      setError('Ingresa el nombre del cliente')
+      return
+    }
+    if (necesitaCompletarDatos) {
+      if (!nombreTiendaEditado.trim()) {
+        setError('Ingresa el nombre de la tienda')
+        return
+      }
+      if (!clienteNombre.trim()) {
+        setError('Ingresa el nombre del cliente')
+        return
+      }
+    }
 
     setError(null)
     setEnviando(true)
@@ -121,12 +156,13 @@ export function NuevaVisitaModal({ abierto, weekId, userId, country, onCerrar, o
 
       let storeId: string
       let storeName: string
-      const creandoTiendaNueva = lugarId === NUEVO_LUGAR || tiendaId === NUEVA_TIENDA
       if (creandoTiendaNueva) {
         const nuevaTienda = await crearTienda({
           place_id: placeId,
           country,
           name: nuevaTiendaNombre.trim(),
+          client_name: clienteNombre.trim(),
+          phone: clienteTelefono.trim() || null,
           latitude: ubicacion.latitude,
           longitude: ubicacion.longitude,
           created_by: userId,
@@ -134,6 +170,14 @@ export function NuevaVisitaModal({ abierto, weekId, userId, country, onCerrar, o
         })
         storeId = nuevaTienda.id
         storeName = nuevaTienda.name
+      } else if (necesitaCompletarDatos && tiendaSeleccionada) {
+        const tiendaActualizada = await actualizarTienda(tiendaSeleccionada.id, {
+          name: nombreTiendaEditado.trim(),
+          client_name: clienteNombre.trim(),
+          phone: clienteTelefono.trim() || null,
+        })
+        storeId = tiendaActualizada.id
+        storeName = tiendaActualizada.name
       } else {
         const tienda = tiendasQuery.data?.find((t) => t.id === tiendaId)
         if (!tienda) throw new Error('Selecciona una tienda válida')
@@ -189,9 +233,79 @@ export function NuevaVisitaModal({ abierto, weekId, userId, country, onCerrar, o
           nuevaTiendaNombre={nuevaTiendaNombre}
           onLugarIdChange={setLugarId}
           onNuevoLugarNombreChange={setNuevoLugarNombre}
-          onTiendaIdChange={setTiendaId}
+          onTiendaIdChange={manejarTiendaIdChange}
           onNuevaTiendaNombreChange={setNuevaTiendaNombre}
         />
+
+        {creandoTiendaNueva && (
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Nombre del cliente</label>
+              <input
+                type="text"
+                required
+                value={clienteNombre}
+                onChange={(e) => setClienteNombre(e.target.value)}
+                placeholder="Nombre del cliente o dueño"
+                className="input-field text-base"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Teléfono (opcional)</label>
+              <input
+                type="tel"
+                value={clienteTelefono}
+                onChange={(e) => setClienteTelefono(e.target.value)}
+                placeholder="Ej. 5555-5555"
+                className="input-field text-base"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* TEMPORAL: mientras se completan los datos de las tiendas ya existentes. Quitar
+            este bloque (y "necesitaCompletarDatos" arriba) cuando ya no haga falta. */}
+        {necesitaCompletarDatos && (
+          <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+            <p className="text-xs font-semibold text-amber-700">
+              A esta tienda todavía le falta el nombre del cliente. Complétalo para continuar.
+            </p>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Nombre de la tienda</label>
+              <input
+                type="text"
+                required
+                value={nombreTiendaEditado}
+                onChange={(e) => setNombreTiendaEditado(e.target.value)}
+                className="input-field text-base"
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Si aquí aparece el nombre del cliente en vez del de la tienda, corrígelo.
+              </p>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Nombre del cliente</label>
+              <input
+                type="text"
+                required
+                value={clienteNombre}
+                onChange={(e) => setClienteNombre(e.target.value)}
+                placeholder="Nombre del cliente o dueño"
+                className="input-field text-base"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Teléfono (opcional)</label>
+              <input
+                type="tel"
+                value={clienteTelefono}
+                onChange={(e) => setClienteTelefono(e.target.value)}
+                placeholder="Ej. 5555-5555"
+                className="input-field text-base"
+              />
+            </div>
+          </div>
+        )}
 
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Notas (opcional)</label>

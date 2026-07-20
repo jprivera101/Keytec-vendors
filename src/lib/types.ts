@@ -60,6 +60,9 @@ export interface Store {
   place_id: string
   country: CountryCode
   name: string
+  /** Nombre del cliente/dueño; null en tiendas antiguas hasta que se visiten y se llene. */
+  client_name: string | null
+  phone: string | null
   latitude: number
   longitude: number
   created_by: string | null

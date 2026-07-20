@@ -16,6 +16,8 @@ export async function crearTienda(input: {
   place_id: string
   country: CountryCode
   name: string
+  client_name: string
+  phone: string | null
   latitude: number
   longitude: number
   created_by: string
@@ -23,6 +25,18 @@ export async function crearTienda(input: {
   photo_path: string
 }): Promise<Store> {
   const { data, error } = await supabase.from('stores').insert(input).select('*').single()
+  if (error) throw error
+  return data
+}
+
+/** Corrige los datos de una tienda ya existente (nombre, cliente, teléfono). Se usa cuando el
+ * vendedor la visita y todavía le falta el nombre del cliente, para ir completando el
+ * historial sin necesidad de un flujo aparte. */
+export async function actualizarTienda(
+  id: string,
+  input: { name: string; client_name: string; phone: string | null },
+): Promise<Store> {
+  const { data, error } = await supabase.from('stores').update(input).eq('id', id).select('*').single()
   if (error) throw error
   return data
 }

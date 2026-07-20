@@ -104,6 +104,8 @@ function ListaTiendas({ pais }: { pais: AdminOutletContext['pais'] }) {
           <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
             <tr>
               <th className="px-4 py-3 font-medium">Tienda</th>
+              <th className="px-4 py-3 font-medium">Cliente</th>
+              <th className="px-4 py-3 font-medium">Teléfono</th>
               {pais === 'ALL' && <th className="px-4 py-3 font-medium">País</th>}
               <th className="px-4 py-3 font-medium">Lugar</th>
               <th className="px-4 py-3 font-medium">Región</th>
@@ -135,6 +137,8 @@ function ListaTiendas({ pais }: { pais: AdminOutletContext['pais'] }) {
                     {tienda.name}
                   </Link>
                 </td>
+                <td className="px-4 py-3 text-slate-500">{tienda.client_name ?? '—'}</td>
+                <td className="px-4 py-3 text-slate-500">{tienda.phone ?? '—'}</td>
                 {pais === 'ALL' && (
                   <td className="px-4 py-3 text-slate-500">
                     <span className="inline-flex items-center gap-1.5">
@@ -156,7 +160,7 @@ function ListaTiendas({ pais }: { pais: AdminOutletContext['pais'] }) {
             ))}
             {tiendasOrdenadas.length === 0 && (
               <tr>
-                <td colSpan={pais === 'ALL' ? 7 : 6} className="px-4 py-6 text-center text-sm text-slate-400">
+                <td colSpan={pais === 'ALL' ? 9 : 8} className="px-4 py-6 text-center text-sm text-slate-400">
                   Todavía no hay tiendas registradas.
                 </td>
               </tr>
@@ -220,7 +224,15 @@ function DetalleTienda({ storeId }: { storeId: string }) {
         <h1 className="text-xl font-bold text-slate-900">{tiendaQuery.data?.name ?? 'Tienda'}</h1>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="card p-3 text-center">
+          <p className="text-xs text-slate-400">Cliente</p>
+          <p className="mt-1 text-sm font-bold text-slate-900">{tiendaQuery.data?.client_name ?? '—'}</p>
+        </div>
+        <div className="card p-3 text-center">
+          <p className="text-xs text-slate-400">Teléfono</p>
+          <p className="mt-1 text-sm font-bold text-slate-900">{tiendaQuery.data?.phone ?? '—'}</p>
+        </div>
         <div className="card p-3 text-center">
           <p className="text-xs text-slate-400">Visitas</p>
           <p className="mt-1 text-sm font-bold text-slate-900">{visitasQuery.data?.length ?? 0}</p>
