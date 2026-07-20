@@ -10,6 +10,7 @@ import type {
   Profile,
   ResumenAdmin,
   Sale,
+  TopLugarDelMes,
   VentaEnvio,
   Visit,
   VisitaConVendedor,
@@ -713,4 +714,106 @@ export async function obtenerComparativoMensual(
       }
     })
     .sort((a, b) => a.nombre.localeCompare(b.nombre))
+}
+
+// Top lugares -------------------------------------------------------------
+
+/** Ranking de lugares (places) por total vendido en el mes en curso, a propósito sin filtrar
+ * por región/ruta: la idea es ver dónde se vende más sin importar qué ruta lo cubre. Cuando
+ * un lugar tiene tiendas de más de una ruta, se reporta la ruta que más vendió ahí. Devuelve
+ * la lista completa ordenada (no solo el top 3) para que la vista decida cuántos mostrar. */
+export async function obtenerTopLugaresDelMes(pais: CountryCode | 'ALL' = 'ALL'): Promise<TopLugarDelMes[]> {
+  const ahora = new Date()
+  const inicioMesActual = fechaLocalISO(new Date(ahora.getFullYear(), ahora.getMonth(), 1))
+  const inicioMesSiguiente = fechaLocalISO(new Date(ahora.getFullYear(), ahora.getMonth() + 1, 1))
+
+  let semanasQuery = supabase
+    .from('weeks')
+    .select('id, profiles!inner(country)')
+    .gte('start_date', inicioMesActual)
+    .lt('start_date', inicioMesSiguiente)
+  if (pais !== 'ALL') semanasQuery = semanasQuery.eq('profiles.country', pais)
+  const { data: semanas, error: semanasError } = await semanasQuery
+  if (semanasError) throw semanasError
+  const weekIds = (semanas ?? []).map((s) => s.id)
+  if (weekIds.length === 0) return []
+
+  const { data: visitas, error: visitasError } = await supabase
+    .from('visits')
+    .select('id, store_id')
+    .in('week_id', weekIds)
+    .not('store_id', 'is', null)
+  if (visitasError) throw visitasError
+
+  const storeIdPorVisitId = new Map<string, string>()
+  for (const v of visitas ?? []) {
+    if (v.store_id) storeIdPorVisitId.set(v.id, v.store_id)
+  }
+  const visitIds = Array.from(storeIdPorVisitId.keys())
+  if (visitIds.length === 0) return []
+
+  const { data: ventas, error: ventasError } = await supabase
+    .from('sales')
+    .select('amount, visit_id')
+    .in('visit_id', visitIds)
+  if (ventasError) throw ventasError
+
+  const totalPorStoreId = new Map<string, number>()
+  for (const venta of ventas ?? []) {
+    const storeId = storeIdPorVisitId.get(venta.visit_id)
+    if (!storeId) continue
+    totalPorStoreId.set(storeId, (totalPorStoreId.get(storeId) ?? 0) + Number(venta.amount))
+  }
+  if (totalPorStoreId.size === 0) return []
+
+  const storeIds = Array.from(totalPorStoreId.keys())
+  const { data: tiendas, error: tiendasError } = await supabase
+    .from('stores')
+    .select('id, place_id, route_id, country, places(name), routes(name)')
+    .in('id', storeIds)
+  if (tiendasError) throw tiendasError
+
+  interface AcumuladoLugar {
+    placeName: string
+    country: CountryCode
+    total: number
+    // Total por ruta dentro de este lugar, para reportar la que más vendió ahí.
+    totalPorRuta: Map<string, { nombre: string; total: number }>
+  }
+  const porLugar = new Map<string, AcumuladoLugar>()
+
+  for (const tienda of (tiendas ?? []) as unknown as {
+    id: string
+    place_id: string
+    route_id: string | null
+    country: CountryCode
+    places: { name: string } | null
+    routes: { name: string } | null
+  }[]) {
+    const total = totalPorStoreId.get(tienda.id) ?? 0
+    if (total <= 0) continue
+    const acumulado = porLugar.get(tienda.place_id) ?? {
+      placeName: tienda.places?.name ?? 'Lugar sin nombre',
+      country: tienda.country,
+      total: 0,
+      totalPorRuta: new Map(),
+    }
+    acumulado.total += total
+    const rutaKey = tienda.route_id ?? '__sin_ruta__'
+    const ruta = acumulado.totalPorRuta.get(rutaKey) ?? { nombre: tienda.routes?.name ?? 'Sin ruta', total: 0 }
+    ruta.total += total
+    acumulado.totalPorRuta.set(rutaKey, ruta)
+    porLugar.set(tienda.place_id, acumulado)
+  }
+
+  return Array.from(porLugar, ([placeId, acumulado]) => {
+    const rutaPrincipal = Array.from(acumulado.totalPorRuta.values()).sort((a, b) => b.total - a.total)[0]
+    return {
+      placeId,
+      placeName: acumulado.placeName,
+      total: acumulado.total,
+      country: acumulado.country,
+      routeName: rutaPrincipal?.nombre ?? null,
+    }
+  }).sort((a, b) => b.total - a.total)
 }

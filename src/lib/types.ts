@@ -150,6 +150,16 @@ export interface ComparativoVendedor {
   anterior: MetricasPeriodo | null
 }
 
+/** Un lugar (place) con el total vendido ahí en el período, sin importar qué ruta lo cubre
+ * — para el ranking "top lugares" que ignora el filtro de región a propósito. */
+export interface TopLugarDelMes {
+  placeId: string
+  placeName: string
+  total: number
+  country: CountryCode
+  routeName: string | null
+}
+
 export interface ResumenAdmin {
   vendedoresActivos: number
   rutasActivas: number

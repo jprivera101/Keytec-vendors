@@ -1,14 +1,20 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useOutletContext } from 'react-router-dom'
-import { obtenerResumenAdmin, obtenerComparativoSemanal, obtenerComparativoMensual } from '../../lib/api'
+import {
+  obtenerResumenAdmin,
+  obtenerComparativoSemanal,
+  obtenerComparativoMensual,
+  obtenerTopLugaresDelMes,
+} from '../../lib/api'
 import { formatMonto } from '../../lib/currency'
 import { Spinner } from '../../components/Spinner'
 import { PageHeader } from '../../components/PageHeader'
 import { TablaComparativoVendedores } from '../../components/TablaComparativoVendedores'
 import { IconResumen } from '../../components/icons'
-import type { AdminOutletContext } from './AdminLayout'
-import type { CountryCode } from '../../lib/types'
+import { Flag } from '../../components/flags'
+import { NOMBRE_PAIS, type AdminOutletContext } from './AdminLayout'
+import type { CountryCode, TopLugarDelMes } from '../../lib/types'
 
 const acentos = ['bg-brand-700', 'bg-ink-700', 'bg-[#0092D2]']
 
@@ -29,6 +35,13 @@ export function ResumenAdmin() {
   const comparativoMensualQuery = useQuery({
     queryKey: ['comparativo-mensual', pais, region],
     queryFn: () => obtenerComparativoMensual(pais, region),
+    enabled: vista === 'mes',
+  })
+  // A propósito sin "region": la idea es ver el lugar que más vendió en todo el país, sin
+  // que el filtro de ruta del panel lateral lo esconda.
+  const topLugaresQuery = useQuery({
+    queryKey: ['top-lugares-mes', pais],
+    queryFn: () => obtenerTopLugaresDelMes(pais),
     enabled: vista === 'mes',
   })
 
@@ -101,6 +114,12 @@ export function ResumenAdmin() {
             ventasPorVendedor={ventasPorVendedorMes}
             sinVentasTexto="Nadie ha registrado ventas este mes todavía."
           />
+
+          {topLugaresQuery.isLoading ? (
+            <Spinner texto="Cargando top lugares..." />
+          ) : (
+            <TopLugares lugares={topLugaresQuery.data ?? []} paisesAMostrar={paisesAMostrar} />
+          )}
 
           {comparativoMensualQuery.isLoading ? (
             <Spinner texto="Cargando comparativo mensual..." />
@@ -238,5 +257,59 @@ function TarjetasResumen({
         )}
       </div>
     </>
+  )
+}
+
+const TOP_N = 3
+
+/** Top 3 lugares por venta del mes, a propósito sin importar la ruta (se muestra como dato
+ * informativo junto al nombre del lugar). Se separa por país cuando se ven "Todos", porque
+ * nunca se suman Quetzales con Dólares. */
+function TopLugares({
+  lugares,
+  paisesAMostrar,
+}: {
+  lugares: TopLugarDelMes[]
+  paisesAMostrar: CountryCode[]
+}) {
+  return (
+    <div className="card p-5">
+      <h2 className="mb-4 text-sm font-semibold text-slate-500">Top 3 lugares (mes actual)</h2>
+      <div className={paisesAMostrar.length > 1 ? 'space-y-5' : ''}>
+        {paisesAMostrar.map((c) => {
+          const top = lugares.filter((l) => l.country === c).slice(0, TOP_N)
+          return (
+            <div key={c}>
+              {paisesAMostrar.length > 1 && (
+                <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-400">
+                  <Flag country={c} size={13} />
+                  {NOMBRE_PAIS[c]}
+                </p>
+              )}
+              {top.length === 0 ? (
+                <p className="text-sm text-slate-400">Sin ventas todavía.</p>
+              ) : (
+                <ol className="space-y-3">
+                  {top.map((lugar, i) => (
+                    <li key={lugar.placeId} className="flex items-center gap-3">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-500">
+                        {i + 1}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-slate-900">{lugar.placeName}</p>
+                        <p className="truncate text-xs text-slate-400">{lugar.routeName ?? 'Sin ruta'}</p>
+                      </div>
+                      <span className="shrink-0 text-sm font-semibold text-slate-900">
+                        {formatMonto(lugar.total, lugar.country)}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
   )
 }
