@@ -176,6 +176,11 @@ export async function crearGasolina(input: {
   return data
 }
 
+export async function actualizarMontoGasolina(id: string, amount: number): Promise<void> {
+  const { error } = await supabase.from('gasoline_logs').update({ amount }).eq('id', id)
+  if (error) throw error
+}
+
 export async function obtenerGasolinaDeSemana(weekId: string): Promise<GasolinaRegistro[]> {
   const { data, error } = await supabase
     .from('gasoline_logs')
@@ -211,10 +216,10 @@ export async function obtenerVentasEnvioDeSemana(weekId: string): Promise<VentaE
 
 // Depositos --------------------------------------------------------------
 
-export async function crearDeposito(salesmanId: string, photoPath: string): Promise<Deposito> {
+export async function crearDeposito(salesmanId: string, photoPath: string, label: string): Promise<Deposito> {
   const { data, error } = await supabase
     .from('deposits')
-    .insert({ salesman_id: salesmanId, photo_path: photoPath })
+    .insert({ salesman_id: salesmanId, photo_path: photoPath, label })
     .select('*')
     .single()
   if (error) throw error

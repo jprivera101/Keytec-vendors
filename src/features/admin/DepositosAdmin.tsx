@@ -28,7 +28,8 @@ async function agregarDepositosAZip(zip: JSZip, depositos: Deposito[]) {
     const url = await obtenerUrlFirmada('deposit-photos', deposito.photo_path)
     const blob = await (await fetch(url)).blob()
     const fecha = fechaLocalISO(deposito.created_at)
-    zip.file(`deposito-${fecha}-${i + 1}.jpg`, blob)
+    const nombre = deposito.label ? `${slug(deposito.label)}-` : ''
+    zip.file(`deposito-${nombre}${fecha}-${i + 1}.jpg`, blob)
   }
 }
 

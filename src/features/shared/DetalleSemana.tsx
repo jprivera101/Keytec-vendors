@@ -24,12 +24,14 @@ export function DetalleSemana({
   country,
   puedeAgregarVenta = false,
   onAgregarVenta = () => {},
+  puedeEditarGasolina = false,
 }: {
   weekId: string
   tiendasRegion?: TiendaConLugar[]
   country?: CountryCode | null
   puedeAgregarVenta?: boolean
   onAgregarVenta?: (visitId: string) => void
+  puedeEditarGasolina?: boolean
 }) {
   const semanaQuery = useQuery({
     queryKey: ['semana', weekId],
@@ -132,7 +134,12 @@ export function DetalleSemana({
       <Modal titulo="Gasolina de la semana" abierto={gasolinaAbierta} onCerrar={() => setGasolinaAbierta(false)}>
         <div className="space-y-3">
           {gasolina.map((registro) => (
-            <GasolinaCard key={registro.id} registro={registro} country={country} />
+            <GasolinaCard
+              key={registro.id}
+              registro={registro}
+              country={country}
+              puedeEditar={puedeEditarGasolina}
+            />
           ))}
         </div>
       </Modal>

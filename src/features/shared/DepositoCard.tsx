@@ -5,10 +5,12 @@ import type { Deposito } from '../../lib/types'
 
 interface Props {
   deposito: Deposito
+  vendedorNombre?: string
 }
 
-/** Fila de un depósito: solo evidencia fotográfica (sin monto). */
-export function DepositoCard({ deposito }: Props) {
+/** Fila de un depósito: solo evidencia fotográfica (sin monto). `vendedorNombre` es para
+ * vistas que mezclan depósitos de varios vendedores (p.ej. la del operario). */
+export function DepositoCard({ deposito, vendedorNombre }: Props) {
   const [fotoAmpliada, setFotoAmpliada] = useState(false)
   const fecha = new Date(deposito.created_at).toLocaleString('es-GT', {
     day: '2-digit',
@@ -29,8 +31,11 @@ export function DepositoCard({ deposito }: Props) {
         />
       </button>
       <div className="min-w-0 flex-1">
-        <p className="font-semibold text-slate-900">💰 Depósito</p>
-        <p className="text-xs text-slate-400">{fecha}</p>
+        <p className="truncate font-semibold text-slate-900">💰 {deposito.label || 'Depósito'}</p>
+        <p className="truncate text-xs text-slate-400">
+          {vendedorNombre && <span className="font-medium text-slate-500">{vendedorNombre} · </span>}
+          {fecha}
+        </p>
       </div>
 
       <Modal titulo="Foto del depósito" abierto={fotoAmpliada} onCerrar={() => setFotoAmpliada(false)}>

@@ -288,6 +288,7 @@ export function AnaliticaAdmin() {
           weekId={weekId}
           tiendasRegion={tiendasRegionQuery.data ?? []}
           country={vendedorSeleccionado?.country}
+          puedeEditarGasolina
         />
       ) : (
         <Spinner />

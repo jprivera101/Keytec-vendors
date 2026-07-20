@@ -156,6 +156,7 @@ export interface Deposito {
   id: string
   salesman_id: string
   photo_path: string
+  label: string | null
   created_at: string
 }
 

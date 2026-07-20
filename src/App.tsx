@@ -16,6 +16,7 @@ import { TiendasAdmin } from './features/admin/TiendasAdmin'
 import { DepositosAdmin } from './features/admin/DepositosAdmin'
 import { OperarioLayout } from './features/operario/OperarioLayout'
 import { PanelOperario } from './features/operario/PanelOperario'
+import { DepositosOperario } from './features/operario/DepositosOperario'
 
 function InicioRedirect() {
   const { session, profile, cargando } = useAuth()
@@ -68,6 +69,7 @@ export default function App() {
         }
       >
         <Route index element={<PanelOperario />} />
+        <Route path="depositos" element={<DepositosOperario />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

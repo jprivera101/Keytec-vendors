@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient'
-import type { CountryCode, Profile, WeekStatus } from './types'
+import type { CountryCode, Deposito, Profile, WeekStatus } from './types'
 
 export interface OperarioConAsignados extends Profile {
   asignados: number
@@ -158,6 +158,21 @@ export async function obtenerVentasOperario(): Promise<VentaOperario[]> {
       },
     ]
   })
+}
+
+// Depósitos --------------------------------------------------------------
+
+/** Depósitos de los vendedores asignados al operario (la RLS ya limita a esos, esta lista
+ * solo evita traer de más si el operario filtra por un vendedor puntual). */
+export async function obtenerDepositosDeOperario(salesmanIds: string[]): Promise<Deposito[]> {
+  if (salesmanIds.length === 0) return []
+  const { data, error } = await supabase
+    .from('deposits')
+    .select('*')
+    .in('salesman_id', salesmanIds)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
 }
 
 export async function marcarVentaProcesada(

@@ -1,13 +1,16 @@
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { FotoPrivada } from '../../components/FotoPrivada'
 import { Modal } from '../../components/Modal'
 import { IconChevron } from '../../components/icons'
 import { formatMonto } from '../../lib/currency'
+import { actualizarMontoGasolina } from '../../lib/api'
 import type { CountryCode, GasolinaRegistro } from '../../lib/types'
 
 interface Props {
   registro: GasolinaRegistro
   country?: CountryCode | null
+  puedeEditar?: boolean
 }
 
 const ETIQUETAS_FOTO = {
@@ -18,9 +21,14 @@ const ETIQUETAS_FOTO = {
 
 /** Fila compacta (⛽ + monto); expande para ver las 3 fotos (tanque antes/después + factura),
  * cada una ampliable con un toque para verificarla bien. */
-export function GasolinaCard({ registro, country }: Props) {
+export function GasolinaCard({ registro, country, puedeEditar = false }: Props) {
+  const queryClient = useQueryClient()
   const [expandido, setExpandido] = useState(false)
   const [fotoAmpliada, setFotoAmpliada] = useState<keyof typeof ETIQUETAS_FOTO | null>(null)
+  const [editando, setEditando] = useState(false)
+  const [monto, setMonto] = useState(String(registro.amount))
+  const [guardando, setGuardando] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const fecha = new Date(registro.created_at).toLocaleString('es-GT', {
     day: '2-digit',
     month: '2-digit',
@@ -28,6 +36,25 @@ export function GasolinaCard({ registro, country }: Props) {
     hour: '2-digit',
     minute: '2-digit',
   })
+
+  async function guardarMonto() {
+    const valor = Number(monto)
+    if (!monto || Number.isNaN(valor) || valor <= 0) {
+      setError('Ingresa un monto válido')
+      return
+    }
+    setError(null)
+    setGuardando(true)
+    try {
+      await actualizarMontoGasolina(registro.id, valor)
+      await queryClient.invalidateQueries({ queryKey: ['gasolina', registro.week_id] })
+      setEditando(false)
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setGuardando(false)
+    }
+  }
 
   return (
     <div className="card overflow-hidden">
@@ -48,6 +75,54 @@ export function GasolinaCard({ registro, country }: Props) {
           className={`shrink-0 text-slate-400 transition-transform ${expandido ? 'rotate-180' : ''}`}
         />
       </button>
+
+      {expandido && puedeEditar && (
+        <div className="border-t border-slate-100 p-3">
+          {editando ? (
+            <div className="space-y-2">
+              <input
+                type="number"
+                inputMode="decimal"
+                autoFocus
+                value={monto}
+                onChange={(e) => setMonto(e.target.value)}
+                className="input-field text-base"
+              />
+              {error && <p className="text-sm text-red-600">{error}</p>}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={guardarMonto}
+                  disabled={guardando}
+                  className="btn-primary flex-1 py-2 text-sm"
+                >
+                  {guardando ? 'Guardando...' : 'Guardar'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditando(false)
+                    setMonto(String(registro.amount))
+                    setError(null)
+                  }}
+                  disabled={guardando}
+                  className="flex-1 rounded-lg border border-slate-200 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setEditando(true)}
+              className="text-xs font-medium text-brand-700 hover:underline"
+            >
+              Corregir monto
+            </button>
+          )}
+        </div>
+      )}
 
       {expandido && (
         <div className="grid grid-cols-3 gap-2 border-t border-slate-100 p-3">
