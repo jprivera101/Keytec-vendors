@@ -14,7 +14,6 @@ import type {
   TopLugarDelMes,
   VentaEnvio,
   Visit,
-  VisitaConVendedor,
   VisitWithSales,
   VendedorConRegion,
   Week,
@@ -138,30 +137,6 @@ export async function obtenerVisitasConVentas(weekId: string): Promise<VisitWith
     .order('captured_at', { ascending: true })
   if (error) throw error
   return data as VisitWithSales[]
-}
-
-/** Visitas de la semana ACTIVA de cada vendedor dado, para la vista general de Analítica
- * (varios vendedores juntos en un solo mapa). Usa un inner join a "weeks" para poder filtrar
- * por su estado y su vendedor directamente en la consulta. */
-export async function obtenerVisitasActivasDeVendedores(
-  vendedorIds: string[],
-): Promise<VisitaConVendedor[]> {
-  if (vendedorIds.length === 0) return []
-  const { data, error } = await supabase
-    .from('visits')
-    .select('*, sales(*), weeks!inner(status, salesman_id, profiles(full_name))')
-    .eq('weeks.status', 'active')
-    .in('weeks.salesman_id', vendedorIds)
-    .order('captured_at', { ascending: true })
-  if (error) throw error
-
-  return ((data ?? []) as unknown as Array<
-    VisitWithSales & { weeks: { salesman_id: string; profiles: { full_name: string } | null } }
-  >).map((fila) => ({
-    ...fila,
-    vendedorId: fila.weeks.salesman_id,
-    vendedorNombre: fila.weeks.profiles?.full_name ?? 'Vendedor',
-  }))
 }
 
 // Gasolina -------------------------------------------------------------
