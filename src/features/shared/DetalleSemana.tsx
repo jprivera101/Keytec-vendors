@@ -6,6 +6,7 @@ import {
   obtenerGasolinaDeSemana,
   obtenerVentasEnvioDeSemana,
   obtenerParqueosDeSemana,
+  obtenerTrackingDeSemana,
 } from '../../lib/api'
 import { formatMonto } from '../../lib/currency'
 import { formatNumero } from '../../lib/numeros'
@@ -18,6 +19,7 @@ import { VisitaCard } from './VisitaCard'
 import { GasolinaCard } from './GasolinaCard'
 import { EnvioCard } from './EnvioCard'
 import { ParqueoCard } from './ParqueoCard'
+import { TrackingDiarioCard } from './TrackingDiarioCard'
 import type { CountryCode, TiendaConLugar } from '../../lib/types'
 
 export function DetalleSemana({
@@ -60,6 +62,11 @@ export function DetalleSemana({
     queryFn: () => obtenerParqueosDeSemana(weekId),
   })
 
+  const trackingQuery = useQuery({
+    queryKey: ['tracking-diario', weekId],
+    queryFn: () => obtenerTrackingDeSemana(weekId),
+  })
+
   const [gasolinaAbierta, setGasolinaAbierta] = useState(false)
 
   if (semanaQuery.isLoading || visitasQuery.isLoading) return <Spinner texto="Cargando semana..." />
@@ -70,6 +77,7 @@ export function DetalleSemana({
   const gasolina = gasolinaQuery.data ?? []
   const ventasEnvio = ventasEnvioQuery.data ?? []
   const parqueos = parqueosQuery.data ?? []
+  const tracking = trackingQuery.data ?? []
   const totalVentas =
     visitas.reduce((suma, v) => suma + v.sales.reduce((s, venta) => s + Number(venta.amount), 0), 0) +
     ventasEnvio.reduce((suma, v) => suma + Number(v.amount), 0)
@@ -136,6 +144,14 @@ export function DetalleSemana({
         ))}
         {parqueos.length === 0 && <p className="text-sm text-slate-400">Sin parqueos registrados.</p>}
       </SeccionColapsable>
+
+      {tracking.length > 0 && (
+        <SeccionColapsable titulo="🚗 Tracking diario" cantidad={tracking.length}>
+          {tracking.map((dia) => (
+            <TrackingDiarioCard key={dia.id} tracking={dia} />
+          ))}
+        </SeccionColapsable>
+      )}
 
       <Modal titulo="Gasolina de la semana" abierto={gasolinaAbierta} onCerrar={() => setGasolinaAbierta(false)}>
         <div className="space-y-3">

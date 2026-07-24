@@ -3,6 +3,7 @@ import { fechaLocalISO } from './fechas'
 import type {
   ComparativoVendedor,
   CountryCode,
+  DailyTracking,
   Deposito,
   GasolinaRegistro,
   MetricasPeriodo,
@@ -308,6 +309,56 @@ export async function obtenerParqueosDeSemana(weekId: string): Promise<ParkingSp
   return data
 }
 
+// Tracking diario ------------------------------------------------------
+
+export async function obtenerTrackingAbierto(salesmanId: string): Promise<DailyTracking | null> {
+  const { data, error } = await supabase
+    .from('daily_tracking')
+    .select('*')
+    .eq('salesman_id', salesmanId)
+    .is('ended_at', null)
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
+export async function crearTrackingDiario(input: {
+  week_id: string
+  salesman_id: string
+  tracking_date: string
+  start_km: number
+  start_photo_path: string
+}): Promise<DailyTracking> {
+  const { data, error } = await supabase.from('daily_tracking').insert(input).select('*').single()
+  if (error) throw error
+  return data
+}
+
+export async function cerrarTrackingDiario(
+  id: string,
+  endKm: number,
+  endPhotoPath: string,
+): Promise<DailyTracking> {
+  const { data, error } = await supabase
+    .from('daily_tracking')
+    .update({ end_km: endKm, end_photo_path: endPhotoPath, ended_at: new Date().toISOString() })
+    .eq('id', id)
+    .select('*')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function obtenerTrackingDeSemana(weekId: string): Promise<DailyTracking[]> {
+  const { data, error } = await supabase
+    .from('daily_tracking')
+    .select('*')
+    .eq('week_id', weekId)
+    .order('started_at', { ascending: true })
+  if (error) throw error
+  return data
+}
+
 // Administracion ---------------------------------------------------
 
 export async function obtenerVendedores(
@@ -356,6 +407,7 @@ export async function actualizarVendedor(
     km_per_gallon?: number | null
     username?: string
     parking_enabled?: boolean
+    daily_tracking_enabled?: boolean
   },
 ): Promise<void> {
   const { error } = await supabase.from('profiles').update(input).eq('id', id)

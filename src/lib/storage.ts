@@ -7,6 +7,7 @@ export type BucketFotos =
   | 'gasoline-photos'
   | 'deposit-photos'
   | 'parking-photos'
+  | 'daily-tracking-photos'
 
 /** Sube una foto ya comprimida a la carpeta del usuario dentro del bucket indicado. */
 export async function subirFoto(bucket: BucketFotos, userId: string, archivo: Blob) {

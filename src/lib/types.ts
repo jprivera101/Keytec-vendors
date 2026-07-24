@@ -16,6 +16,8 @@ export interface Profile {
   username: string | null
   /** Si puede usar la funcion de marcar parqueo; algunos vendedores no la necesitan. */
   parking_enabled: boolean
+  /** Si debe reportar km al empezar/terminar cada día (no solo la semana completa). */
+  daily_tracking_enabled: boolean
   /** true si la contraseña actual es temporal (recien creada o restablecida) y debe
    * reemplazarse antes de dejar usar el resto de la app. */
   must_change_password: boolean
@@ -193,6 +195,21 @@ export interface ParkingSpot {
   longitude: number
   car_photo_path: string
   receipt_photo_path: string | null
+  started_at: string
+  ended_at: string | null
+}
+
+/** Un día de "tracking diario": km + foto al empezar, y (si ya se cerró) km + foto al
+ * terminar. `end_*` es null mientras el día sigue abierto. */
+export interface DailyTracking {
+  id: string
+  week_id: string
+  salesman_id: string
+  tracking_date: string
+  start_km: number
+  start_photo_path: string
+  end_km: number | null
+  end_photo_path: string | null
   started_at: string
   ended_at: string | null
 }

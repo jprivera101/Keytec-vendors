@@ -16,12 +16,13 @@ import { VisitaCard } from '../shared/VisitaCard'
 import type { AdminOutletContext } from './AdminLayout'
 import type { CountryCode, TiendaConEstadisticas } from '../../lib/types'
 
-type CampoOrden = 'visitas' | 'ventas' | 'ultimaVisita'
+type CampoOrden = 'lugar' | 'visitas' | 'ventas' | 'ultimaVisita'
 type Orden = { campo: CampoOrden; direccion: 'asc' | 'desc' }
 
 function ordenarTiendas(tiendas: TiendaConEstadisticas[], orden: Orden) {
   const factor = orden.direccion === 'asc' ? 1 : -1
   return [...tiendas].sort((a, b) => {
+    if (orden.campo === 'lugar') return (a.placeName ?? '').localeCompare(b.placeName ?? '') * factor
     if (orden.campo === 'visitas') return (a.totalVisitas - b.totalVisitas) * factor
     if (orden.campo === 'ventas') return (a.totalVentas - b.totalVentas) * factor
     // Última visita: las tiendas sin visitas quedan siempre al final, sin importar la dirección.
@@ -107,7 +108,12 @@ function ListaTiendas({ pais }: { pais: AdminOutletContext['pais'] }) {
               <th className="px-4 py-3 font-medium">Cliente</th>
               <th className="px-4 py-3 font-medium">Teléfono</th>
               {pais === 'ALL' && <th className="px-4 py-3 font-medium">País</th>}
-              <th className="px-4 py-3 font-medium">Lugar</th>
+              <EncabezadoOrdenable
+                etiqueta="Lugar"
+                campo="lugar"
+                orden={orden}
+                onClick={() => alternarOrden('lugar')}
+              />
               <th className="px-4 py-3 font-medium">Región</th>
               <EncabezadoOrdenable
                 etiqueta="Visitas"

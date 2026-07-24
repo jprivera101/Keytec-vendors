@@ -193,7 +193,7 @@ export function MapaRuta({
           zoom={13}
           maxZoom={19}
           className="h-full w-full"
-          scrollWheelZoom={false}
+          scrollWheelZoom
         >
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
