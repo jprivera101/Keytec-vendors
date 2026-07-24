@@ -63,8 +63,11 @@ Deno.serve(async (req) => {
     const { email, password, full_name, phone, route_id, km_per_gallon } = body ?? {};
     let { country } = body ?? {};
 
-    if (!password || !full_name) {
-      return jsonResponse({ error: "password y full_name son requeridos" }, 400);
+    if (typeof password !== "string" || password.length < 6 || !full_name) {
+      return jsonResponse(
+        { error: "password (mínimo 6 caracteres) y full_name son requeridos" },
+        400,
+      );
     }
     if (!route_id) {
       return jsonResponse({ error: "route_id (región) es requerido" }, 400);

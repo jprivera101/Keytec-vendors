@@ -57,9 +57,14 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { email, password, full_name, phone, country } = body ?? {};
 
-    if (!password || !full_name || !PAISES_VALIDOS.includes(country)) {
+    if (
+      typeof password !== "string" ||
+      password.length < 6 ||
+      !full_name ||
+      !PAISES_VALIDOS.includes(country)
+    ) {
       return jsonResponse(
-        { error: "password, full_name y country (GT o SV) son requeridos" },
+        { error: "password (mínimo 6 caracteres), full_name y country (GT o SV) son requeridos" },
         400,
       );
     }

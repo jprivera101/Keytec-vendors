@@ -56,13 +56,17 @@ Deno.serve(async (req) => {
     const { email, password, full_name, phone, salesman_ids } = body ?? {};
 
     if (
-      !password ||
+      typeof password !== "string" ||
+      password.length < 6 ||
       !full_name ||
       !Array.isArray(salesman_ids) ||
       salesman_ids.length === 0
     ) {
       return jsonResponse(
-        { error: "password, full_name y al menos un vendedor asignado son requeridos" },
+        {
+          error:
+            "password (mínimo 6 caracteres), full_name y al menos un vendedor asignado son requeridos",
+        },
         400,
       );
     }
