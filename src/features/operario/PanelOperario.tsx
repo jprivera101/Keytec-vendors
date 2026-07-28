@@ -6,6 +6,7 @@ import {
   obtenerVendedoresAsignados,
   marcarVentaProcesada,
   obtenerCodigoTienda,
+  obtenerCodigosTiendas,
   establecerCodigoTienda,
   type VentaOperario,
 } from '../../lib/operarios'
@@ -75,6 +76,16 @@ export function PanelOperario() {
     queryFn: () => obtenerCodigoTienda(ventaSeleccionada!.storeId!),
     enabled: !!ventaSeleccionada?.storeId,
   })
+
+  const storeIds = Array.from(
+    new Set((ventasQuery.data ?? []).flatMap((v) => (v.storeId ? [v.storeId] : []))),
+  )
+  const codigosQuery = useQuery({
+    queryKey: ['codigos-tiendas', storeIds],
+    queryFn: () => obtenerCodigosTiendas(storeIds),
+    enabled: storeIds.length > 0,
+  })
+  const codigos = codigosQuery.data ?? new Map<string, string>()
 
   async function marcar(venta: VentaOperario, procesada: boolean) {
     setError(null)
@@ -191,6 +202,11 @@ export function PanelOperario() {
                   {venta.clientName && (
                     <p className="truncate text-xs text-slate-500">{venta.clientName}</p>
                   )}
+                  {venta.storeId && (
+                    <p className="truncate text-xs font-semibold text-brand-700">
+                      Código: {codigos.get(venta.storeId) ?? 'sin asignar'}
+                    </p>
+                  )}
                   <p className="truncate text-xs text-slate-400">
                     {venta.salesmanName} ·{' '}
                     {new Date(venta.createdAt).toLocaleString('es-GT', {
@@ -221,6 +237,7 @@ export function PanelOperario() {
                   <th className="px-4 py-3 font-medium">Foto</th>
                   <th className="px-4 py-3 font-medium">Tienda</th>
                   <th className="px-4 py-3 font-medium">Cliente</th>
+                  <th className="px-4 py-3 font-medium">Código</th>
                   <th className="px-4 py-3 font-medium">Vendedor</th>
                   <th className="px-4 py-3 font-medium">Fecha</th>
                   <th className="px-4 py-3 font-medium">Monto</th>
@@ -252,6 +269,9 @@ export function PanelOperario() {
                       {venta.storeName || 'Tienda sin nombre'}
                     </td>
                     <td className="px-4 py-3 text-slate-500">{venta.clientName || '—'}</td>
+                    <td className="px-4 py-3 font-medium text-brand-700">
+                      {venta.storeId ? (codigos.get(venta.storeId) ?? 'Sin asignar') : '—'}
+                    </td>
                     <td className="px-4 py-3 text-slate-500">{venta.salesmanName}</td>
                     <td className="px-4 py-3 text-slate-500">
                       {new Date(venta.createdAt).toLocaleString('es-GT', {

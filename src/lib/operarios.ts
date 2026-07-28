@@ -273,6 +273,18 @@ export async function obtenerCodigoTienda(storeId: string): Promise<string | nul
   return data?.codigo ?? null
 }
 
+/** Códigos ya registrados para varias tiendas a la vez — para mostrarlos en la lista de
+ * ventas del operario sin tener que abrir cada una para verlo. */
+export async function obtenerCodigosTiendas(storeIds: string[]): Promise<Map<string, string>> {
+  if (storeIds.length === 0) return new Map()
+  const { data, error } = await supabase
+    .from('store_codes')
+    .select('store_id, codigo')
+    .in('store_id', storeIds)
+  if (error) throw error
+  return new Map((data ?? []).map((fila) => [fila.store_id, fila.codigo]))
+}
+
 /** Registra el código la primera vez que un operario lo tiene a mano para esta tienda. Un
  * segundo operario que la atienda después ya lo ve en vez de tener que volver a pedirlo. */
 export async function establecerCodigoTienda(

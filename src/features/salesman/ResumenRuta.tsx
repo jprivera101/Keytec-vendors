@@ -8,13 +8,10 @@ import {
   obtenerDepositosDeVendedorEnRango,
   obtenerParqueoAbierto,
   obtenerParqueosDeSemana,
-  obtenerTrackingAbierto,
-  obtenerTrackingDeSemana,
 } from '../../lib/api'
 import { obtenerTiendasPorRegion } from '../../lib/tiendas'
 import { formatMonto } from '../../lib/currency'
 import { formatNumero } from '../../lib/numeros'
-import { fechaLocalISO } from '../../lib/fechas'
 import { useAuth } from '../../lib/useAuth'
 import { Spinner } from '../../components/Spinner'
 import { IconChevron } from '../../components/icons'
@@ -24,7 +21,6 @@ import { GasolinaCard } from '../shared/GasolinaCard'
 import { EnvioCard } from '../shared/EnvioCard'
 import { DepositoCard } from '../shared/DepositoCard'
 import { ParqueoModal } from './ParqueoModal'
-import { TrackingDiarioModal } from './TrackingDiarioModal'
 import { rangoDeSemana } from '../../lib/rangoSemana'
 
 interface Props {
@@ -44,7 +40,6 @@ export function ResumenRuta({ weekId, puedeAgregarVenta = false, onAgregarVenta 
   const [mapaAbierto, setMapaAbierto] = useState(false)
   const [busqueda, setBusqueda] = useState('')
   const [modalParqueo, setModalParqueo] = useState(false)
-  const [modalTracking, setModalTracking] = useState(false)
   const semanaQuery = useQuery({
     queryKey: ['semana', weekId],
     queryFn: () => obtenerSemanaPorId(weekId),
@@ -83,15 +78,6 @@ export function ResumenRuta({ weekId, puedeAgregarVenta = false, onAgregarVenta 
     queryFn: () => obtenerParqueoAbierto(profile!.id),
     enabled: !!profile?.id,
   })
-  const trackingSemanaQuery = useQuery({
-    queryKey: ['tracking-diario', weekId],
-    queryFn: () => obtenerTrackingDeSemana(weekId),
-  })
-  const trackingAbiertoQuery = useQuery({
-    queryKey: ['tracking-abierto', profile?.id],
-    queryFn: () => obtenerTrackingAbierto(profile!.id),
-    enabled: !!profile?.id,
-  })
 
   if (semanaQuery.isLoading || visitasQuery.isLoading) return <Spinner texto="Cargando..." />
   if (!semanaQuery.data) return <p className="text-sm text-red-600">No se encontró la semana</p>
@@ -103,8 +89,6 @@ export function ResumenRuta({ weekId, puedeAgregarVenta = false, onAgregarVenta 
   const depositos = depositosQuery.data ?? []
   const parqueos = parqueosSemanaQuery.data ?? []
   const parqueoAbierto = parqueoAbiertoQuery.data ?? null
-  const trackingAbierto = trackingAbiertoQuery.data ?? null
-  const trackingHoy = (trackingSemanaQuery.data ?? []).find((t) => t.tracking_date === fechaLocalISO())
   const totalVentas =
     visitas.reduce((suma, v) => suma + v.sales.reduce((s, venta) => s + Number(venta.amount), 0), 0) +
     ventasEnvio.reduce((suma, v) => suma + Number(v.amount), 0)
@@ -142,38 +126,6 @@ export function ResumenRuta({ weekId, puedeAgregarVenta = false, onAgregarVenta 
         <StatTile etiqueta="Tiendas" valor={String(tiendasDistintas)} />
         <StatTile etiqueta="Km recorridos" valor={kmRecorridos != null ? formatNumero(kmRecorridos) : '—'} />
       </div>
-
-      {profile?.daily_tracking_enabled && semana.status === 'active' && (
-        <div className="card flex items-center justify-between gap-3 p-4">
-          {trackingAbierto ? (
-            <>
-              <div>
-                <p className="text-sm font-semibold text-slate-900">🚗 Día en curso</p>
-                <p className="text-xs text-slate-400">Km inicial: {formatNumero(trackingAbierto.start_km)}</p>
-              </div>
-              <button type="button" onClick={() => setModalTracking(true)} className="btn-primary btn-sm">
-                🏁 Terminar día
-              </button>
-            </>
-          ) : trackingHoy ? (
-            <div>
-              <p className="text-sm font-semibold text-slate-900">✓ Día de hoy registrado</p>
-              <p className="text-xs text-slate-400">
-                {formatNumero(trackingHoy.start_km)} → {formatNumero(trackingHoy.end_km!)} km
-                {' · '}
-                {formatNumero(trackingHoy.end_km! - trackingHoy.start_km)} km recorridos
-              </p>
-            </div>
-          ) : (
-            <>
-              <p className="text-sm font-semibold text-slate-900">🚗 Tracking diario</p>
-              <button type="button" onClick={() => setModalTracking(true)} className="btn-primary btn-sm">
-                Empezar día
-              </button>
-            </>
-          )}
-        </div>
-      )}
 
       <div className="card overflow-hidden">
         <button
@@ -285,22 +237,6 @@ export function ResumenRuta({ weekId, puedeAgregarVenta = false, onAgregarVenta 
             setModalParqueo(false)
             queryClient.invalidateQueries({ queryKey: ['parqueos', weekId] })
             queryClient.invalidateQueries({ queryKey: ['parqueo-abierto', profile.id] })
-          }}
-        />
-      )}
-
-      {profile && (
-        <TrackingDiarioModal
-          abierto={modalTracking}
-          modo={trackingAbierto ? 'terminar' : 'empezar'}
-          weekId={weekId}
-          userId={profile.id}
-          trackingAbierto={trackingAbierto}
-          onCerrar={() => setModalTracking(false)}
-          onListo={() => {
-            setModalTracking(false)
-            queryClient.invalidateQueries({ queryKey: ['tracking-diario', weekId] })
-            queryClient.invalidateQueries({ queryKey: ['tracking-abierto', profile.id] })
           }}
         />
       )}
