@@ -15,6 +15,26 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
+// Supabase mantiene la sesión (via refresh token) indefinidamente entre reinicios del
+// navegador -- por diseño, para no pedir contraseña cada vez. Pero eso significa que alguien
+// que abra el navegador de otra persona (o un dispositivo compartido) entra directo, sin
+// importar cuánto tiempo haya pasado. Para datos de ventas/depósitos/códigos de negocio esto
+// no es aceptable: si no hay actividad por INACTIVIDAD_MAXIMA_MS, se cierra la sesión sola,
+// tanto al reabrir la app como en medio de una sesión ya abierta.
+const INACTIVIDAD_MAXIMA_MS = 20 * 60 * 1000 // 20 minutos
+const CLAVE_ULTIMA_ACTIVIDAD = 'ultima_actividad'
+const EVENTOS_ACTIVIDAD = ['mousedown', 'keydown', 'touchstart', 'scroll'] as const
+
+function marcarActividad() {
+  localStorage.setItem(CLAVE_ULTIMA_ACTIVIDAD, String(Date.now()))
+}
+
+function estaInactivo(): boolean {
+  const valor = localStorage.getItem(CLAVE_ULTIMA_ACTIVIDAD)
+  if (!valor) return false // primera vez en este dispositivo: no hay nada que comparar todavía
+  return Date.now() - Number(valor) > INACTIVIDAD_MAXIMA_MS
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
@@ -24,16 +44,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let activo = true
 
-    supabase.auth.getSession().then(({ data }) => {
+    async function iniciar() {
+      const { data } = await supabase.auth.getSession()
       if (!activo) return
+
+      if (data.session && estaInactivo()) {
+        // La sesión técnicamente sigue siendo válida (el refresh token no venció), pero pasó
+        // demasiado tiempo sin uso: se cierra y se pide iniciar sesión de nuevo.
+        await supabase.auth.signOut()
+        if (!activo) return
+        setSession(null)
+        setProfile(null)
+        setCargando(false)
+        return
+      }
+
+      marcarActividad()
       setSession(data.session)
       if (data.session) cargarPerfil(data.session.user.id)
       else setCargando(false)
-    })
+    }
+    iniciar()
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, nuevaSesion) => {
       setSession(nuevaSesion)
       if (nuevaSesion) {
+        marcarActividad()
         cargarPerfil(nuevaSesion.user.id)
       } else {
         setProfile(null)
@@ -41,9 +77,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     })
 
+    // Mientras la sesión sigue abierta (sin recargar la página), cualquier interacción
+    // refresca la marca de actividad, y una revisión periódica cierra la sesión apenas se
+    // cumpla el límite de inactividad -- no hace falta esperar a que alguien recargue.
+    EVENTOS_ACTIVIDAD.forEach((evento) => window.addEventListener(evento, marcarActividad))
+    const intervalo = window.setInterval(() => {
+      if (estaInactivo()) supabase.auth.signOut()
+    }, 30_000)
+
     return () => {
       activo = false
       sub.subscription.unsubscribe()
+      EVENTOS_ACTIVIDAD.forEach((evento) => window.removeEventListener(evento, marcarActividad))
+      window.clearInterval(intervalo)
     }
   }, [])
 
@@ -66,6 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function iniciarSesion(email: string, password: string) {
     setAuthError(null)
     const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (!error) marcarActividad()
     return { error: error ? traducirError(error.message) : null }
   }
 
