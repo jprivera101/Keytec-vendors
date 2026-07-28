@@ -1,7 +1,7 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabaseClient'
-import type { Profile } from './types'
+import type { Profile, UserRole } from './types'
 
 interface AuthContextValue {
   session: Session | null
@@ -19,9 +19,19 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 // navegador -- por diseño, para no pedir contraseña cada vez. Pero eso significa que alguien
 // que abra el navegador de otra persona (o un dispositivo compartido) entra directo, sin
 // importar cuánto tiempo haya pasado. Para datos de ventas/depósitos/códigos de negocio esto
-// no es aceptable: si no hay actividad por INACTIVIDAD_MAXIMA_MS, se cierra la sesión sola,
-// tanto al reabrir la app como en medio de una sesión ya abierta.
-const INACTIVIDAD_MAXIMA_MS = 20 * 60 * 1000 // 20 minutos
+// no es aceptable: si no hay actividad por más del límite de su rol, se cierra la sesión
+// sola, tanto al reabrir la app como en medio de una sesión ya abierta.
+//
+// El límite varía por rol porque el ritmo de uso es muy distinto: un vendedor pasa horas
+// enteras haciendo una ruta sin tocar el teléfono, un operario procesa ventas todo el día
+// seguido, y un admin cae en medio.
+const LIMITES_INACTIVIDAD_MS: Partial<Record<UserRole, number>> = {
+  salesman: 3 * 60 * 60 * 1000, // 3 horas
+  operario: 45 * 60 * 1000, // 45 minutos
+  admin: 2 * 60 * 60 * 1000, // 2 horas
+  super_admin: 2 * 60 * 60 * 1000, // 2 horas
+}
+const LIMITE_POR_DEFECTO_MS = 20 * 60 * 1000 // mientras todavía no se sabe el rol
 const CLAVE_ULTIMA_ACTIVIDAD = 'ultima_actividad'
 const EVENTOS_ACTIVIDAD = ['mousedown', 'keydown', 'touchstart', 'scroll'] as const
 
@@ -29,10 +39,13 @@ function marcarActividad() {
   localStorage.setItem(CLAVE_ULTIMA_ACTIVIDAD, String(Date.now()))
 }
 
-function estaInactivo(): boolean {
+function msInactivo(): number {
   const valor = localStorage.getItem(CLAVE_ULTIMA_ACTIVIDAD)
-  if (!valor) return false // primera vez en este dispositivo: no hay nada que comparar todavía
-  return Date.now() - Number(valor) > INACTIVIDAD_MAXIMA_MS
+  return valor ? Date.now() - Number(valor) : 0
+}
+
+function limiteDe(rol: UserRole | null | undefined): number {
+  return (rol && LIMITES_INACTIVIDAD_MS[rol]) ?? LIMITE_POR_DEFECTO_MS
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -40,58 +53,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [cargando, setCargando] = useState(true)
   const [authError, setAuthError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let activo = true
-
-    async function iniciar() {
-      const { data } = await supabase.auth.getSession()
-      if (!activo) return
-
-      if (data.session && estaInactivo()) {
-        // La sesión técnicamente sigue siendo válida (el refresh token no venció), pero pasó
-        // demasiado tiempo sin uso: se cierra y se pide iniciar sesión de nuevo.
-        await supabase.auth.signOut()
-        if (!activo) return
-        setSession(null)
-        setProfile(null)
-        setCargando(false)
-        return
-      }
-
-      marcarActividad()
-      setSession(data.session)
-      if (data.session) cargarPerfil(data.session.user.id)
-      else setCargando(false)
-    }
-    iniciar()
-
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, nuevaSesion) => {
-      setSession(nuevaSesion)
-      if (nuevaSesion) {
-        marcarActividad()
-        cargarPerfil(nuevaSesion.user.id)
-      } else {
-        setProfile(null)
-        setCargando(false)
-      }
-    })
-
-    // Mientras la sesión sigue abierta (sin recargar la página), cualquier interacción
-    // refresca la marca de actividad, y una revisión periódica cierra la sesión apenas se
-    // cumpla el límite de inactividad -- no hace falta esperar a que alguien recargue.
-    EVENTOS_ACTIVIDAD.forEach((evento) => window.addEventListener(evento, marcarActividad))
-    const intervalo = window.setInterval(() => {
-      if (estaInactivo()) supabase.auth.signOut()
-    }, 30_000)
-
-    return () => {
-      activo = false
-      sub.subscription.unsubscribe()
-      EVENTOS_ACTIVIDAD.forEach((evento) => window.removeEventListener(evento, marcarActividad))
-      window.clearInterval(intervalo)
-    }
-  }, [])
+  // El intervalo periódico (definido una sola vez, en el useEffect de montaje) necesita
+  // conocer el rol vigente para saber contra qué límite comparar; un ref evita tener que
+  // recrear el intervalo cada vez que cambia el perfil.
+  const rolActualRef = useRef<UserRole | null>(null)
 
   async function cargarPerfil(userId: string) {
     const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single()
@@ -105,9 +70,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setCargando(false)
       return
     }
+    if (msInactivo() > limiteDe(data.role)) {
+      // Sesión técnicamente válida (el refresh token no venció), pero pasó más tiempo del
+      // que su rol permite sin actividad: se cierra y se pide iniciar sesión de nuevo.
+      await supabase.auth.signOut()
+      setProfile(null)
+      setCargando(false)
+      return
+    }
+    marcarActividad()
+    rolActualRef.current = data.role
     setProfile(data)
     setCargando(false)
   }
+
+  useEffect(() => {
+    let activo = true
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!activo) return
+      setSession(data.session)
+      if (data.session) cargarPerfil(data.session.user.id)
+      else setCargando(false)
+    })
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, nuevaSesion) => {
+      setSession(nuevaSesion)
+      if (nuevaSesion) {
+        cargarPerfil(nuevaSesion.user.id)
+      } else {
+        rolActualRef.current = null
+        setProfile(null)
+        setCargando(false)
+      }
+    })
+
+    // Mientras la sesión sigue abierta (sin recargar la página), cualquier interacción
+    // refresca la marca de actividad, y una revisión periódica cierra la sesión apenas se
+    // cumpla el límite de inactividad de su rol -- no hace falta esperar a que alguien recargue.
+    EVENTOS_ACTIVIDAD.forEach((evento) => window.addEventListener(evento, marcarActividad))
+    const intervalo = window.setInterval(() => {
+      if (msInactivo() > limiteDe(rolActualRef.current)) supabase.auth.signOut()
+    }, 30_000)
+
+    return () => {
+      activo = false
+      sub.subscription.unsubscribe()
+      EVENTOS_ACTIVIDAD.forEach((evento) => window.removeEventListener(evento, marcarActividad))
+      window.clearInterval(intervalo)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function iniciarSesion(email: string, password: string) {
     setAuthError(null)
