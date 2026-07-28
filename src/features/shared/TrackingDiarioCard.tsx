@@ -1,12 +1,16 @@
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { FotoPrivada } from '../../components/FotoPrivada'
 import { Modal } from '../../components/Modal'
 import { IconChevron } from '../../components/icons'
 import { formatNumero } from '../../lib/numeros'
+import { reabrirTrackingDiario } from '../../lib/api'
 import type { DailyTracking } from '../../lib/types'
 
 interface Props {
   tracking: DailyTracking
+  /** Si el admin puede deshacer el cierre de este día (el vendedor cerró por error). */
+  puedeReabrir?: boolean
 }
 
 function formatearFecha(fecha: string) {
@@ -19,10 +23,28 @@ function formatearFecha(fecha: string) {
 
 /** Fila compacta (🚗 + fecha + km recorridos); expande para ver las fotos del carro al
  * empezar y terminar el día (la del final solo si ya se cerró ese día). */
-export function TrackingDiarioCard({ tracking }: Props) {
+export function TrackingDiarioCard({ tracking, puedeReabrir = false }: Props) {
+  const queryClient = useQueryClient()
   const [expandido, setExpandido] = useState(false)
   const [fotoAmpliada, setFotoAmpliada] = useState<'inicio' | 'fin' | null>(null)
+  const [confirmandoReabrir, setConfirmandoReabrir] = useState(false)
+  const [reabriendo, setReabriendo] = useState(false)
+  const [errorReabrir, setErrorReabrir] = useState<string | null>(null)
   const cerrado = tracking.end_km != null
+
+  async function manejarReabrir() {
+    setReabriendo(true)
+    setErrorReabrir(null)
+    try {
+      await reabrirTrackingDiario(tracking.id)
+      await queryClient.invalidateQueries({ queryKey: ['tracking-diario', tracking.week_id] })
+      setConfirmandoReabrir(false)
+    } catch (e) {
+      setErrorReabrir((e as Error).message)
+    } finally {
+      setReabriendo(false)
+    }
+  }
 
   return (
     <div className="card overflow-hidden">
@@ -76,6 +98,45 @@ export function TrackingDiarioCard({ tracking }: Props) {
           ) : (
             <div className="flex h-24 items-center justify-center rounded-lg bg-slate-100 text-center text-[10px] text-slate-400">
               Día aún no terminado
+            </div>
+          )}
+
+          {puedeReabrir && cerrado && (
+            <div className="col-span-2">
+              {!confirmandoReabrir ? (
+                <button
+                  type="button"
+                  onClick={() => setConfirmandoReabrir(true)}
+                  className="text-xs font-medium text-amber-700 hover:underline"
+                >
+                  ¿Se cerró por error? Reabrir este día
+                </button>
+              ) : (
+                <div className="space-y-2 rounded-lg bg-amber-50 p-2">
+                  <p className="text-xs text-amber-700">
+                    El vendedor podrá volver a marcar "Terminar día" con el km correcto. ¿Confirmas?
+                  </p>
+                  {errorReabrir && <p className="text-xs text-red-600">{errorReabrir}</p>}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setConfirmandoReabrir(false)}
+                      disabled={reabriendo}
+                      className="btn-secondary btn-sm flex-1"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={manejarReabrir}
+                      disabled={reabriendo}
+                      className="btn-primary btn-sm flex-1"
+                    >
+                      {reabriendo ? 'Reabriendo...' : 'Sí, reabrir'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -29,6 +29,7 @@ export function DetalleSemana({
   puedeAgregarVenta = false,
   onAgregarVenta = () => {},
   puedeEditarGasolina = false,
+  puedeReabrirTracking = false,
 }: {
   weekId: string
   tiendasRegion?: TiendaConLugar[]
@@ -36,6 +37,7 @@ export function DetalleSemana({
   puedeAgregarVenta?: boolean
   onAgregarVenta?: (visitId: string) => void
   puedeEditarGasolina?: boolean
+  puedeReabrirTracking?: boolean
 }) {
   const semanaQuery = useQuery({
     queryKey: ['semana', weekId],
@@ -148,7 +150,7 @@ export function DetalleSemana({
       {tracking.length > 0 && (
         <SeccionColapsable titulo="🚗 Tracking diario" cantidad={tracking.length}>
           {tracking.map((dia) => (
-            <TrackingDiarioCard key={dia.id} tracking={dia} />
+            <TrackingDiarioCard key={dia.id} tracking={dia} puedeReabrir={puedeReabrirTracking} />
           ))}
         </SeccionColapsable>
       )}

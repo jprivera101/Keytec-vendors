@@ -251,6 +251,7 @@ export function AnaliticaAdmin() {
           tiendasRegion={tiendasRegionQuery.data ?? []}
           country={vendedorSeleccionado?.country}
           puedeEditarGasolina
+          puedeReabrirTracking
         />
       ) : (
         <Spinner />

@@ -286,15 +286,35 @@ export async function obtenerParqueosDeSemana(weekId: string): Promise<ParkingSp
 
 // Tracking diario ------------------------------------------------------
 
+/** El dia abierto mas reciente del vendedor. Normalmente hay a lo sumo uno, pero si un admin
+ * "reabre" un dia pasado (ver reabrirTrackingDiario) podria haber dos a la vez por un rato —
+ * por eso se toma el mas reciente en vez de maybeSingle(), que fallaria con mas de una fila. */
 export async function obtenerTrackingAbierto(salesmanId: string): Promise<DailyTracking | null> {
   const { data, error } = await supabase
     .from('daily_tracking')
     .select('*')
     .eq('salesman_id', salesmanId)
     .is('ended_at', null)
+    .order('started_at', { ascending: false })
+    .limit(1)
+  if (error) throw error
+  return data?.[0] ?? null
+}
+
+/** Ultimo kilometraje conocido del vendedor (el final, o si no se cerró, el inicial, del día
+ * con registro más reciente) — para no dejar que un día nuevo empiece con menos km que el
+ * anterior. null si todavía no tiene ningún día registrado. */
+export async function obtenerUltimoKmTracking(salesmanId: string): Promise<number | null> {
+  const { data, error } = await supabase
+    .from('daily_tracking')
+    .select('start_km, end_km')
+    .eq('salesman_id', salesmanId)
+    .order('tracking_date', { ascending: false })
+    .limit(1)
     .maybeSingle()
   if (error) throw error
-  return data
+  if (!data) return null
+  return data.end_km ?? data.start_km
 }
 
 export async function crearTrackingDiario(input: {
@@ -322,6 +342,17 @@ export async function cerrarTrackingDiario(
     .single()
   if (error) throw error
   return data
+}
+
+/** Admin: deshace el cierre de un día (p.ej. el vendedor cerró por error). Reutiliza el mismo
+ * registro en vez de borrarlo, así que el historial y los cálculos del día siguen intactos
+ * una vez que el vendedor lo vuelva a cerrar con el dato correcto. */
+export async function reabrirTrackingDiario(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('daily_tracking')
+    .update({ end_km: null, end_photo_path: null, ended_at: null })
+    .eq('id', id)
+  if (error) throw error
 }
 
 export async function obtenerTrackingDeSemana(weekId: string): Promise<DailyTracking[]> {

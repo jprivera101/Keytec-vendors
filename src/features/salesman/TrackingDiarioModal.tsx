@@ -4,7 +4,8 @@ import { CamaraCaptura } from '../../components/CamaraCaptura'
 import { comprimirImagen } from '../../lib/imageCompress'
 import { subirFoto } from '../../lib/storage'
 import { fechaLocalISO } from '../../lib/fechas'
-import { crearTrackingDiario, cerrarTrackingDiario } from '../../lib/api'
+import { crearTrackingDiario, cerrarTrackingDiario, obtenerUltimoKmTracking } from '../../lib/api'
+import { formatNumero } from '../../lib/numeros'
 import type { DailyTracking } from '../../lib/types'
 
 interface Props {
@@ -37,6 +38,7 @@ export function TrackingDiarioModal({
   const [km, setKm] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [ultimoKm, setUltimoKm] = useState<number | null>(null)
 
   useEffect(() => {
     if (abierto) {
@@ -44,8 +46,13 @@ export function TrackingDiarioModal({
       setArchivo(null)
       setKm('')
       setError(null)
+      setUltimoKm(null)
+      if (modo === 'empezar') {
+        obtenerUltimoKmTracking(userId).then(setUltimoKm).catch(() => setUltimoKm(null))
+      }
     }
-  }, [abierto])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abierto, modo])
 
   function manejarFotoCapturada(foto: Blob) {
     setArchivo(foto)
@@ -60,7 +67,11 @@ export function TrackingDiarioModal({
       return
     }
     if (modo === 'terminar' && trackingAbierto && valor < trackingAbierto.start_km) {
-      setError(`El km final no puede ser menor al inicial (${trackingAbierto.start_km})`)
+      setError(`El km final no puede ser menor al inicial (${formatNumero(trackingAbierto.start_km)})`)
+      return
+    }
+    if (modo === 'empezar' && ultimoKm != null && valor < ultimoKm) {
+      setError(`El km inicial no puede ser menor al del día anterior (${formatNumero(ultimoKm)})`)
       return
     }
     setError(null)
@@ -110,6 +121,16 @@ export function TrackingDiarioModal({
                 placeholder="Ej. 12345.6"
                 className="input-field text-base"
               />
+              {modo === 'empezar' && ultimoKm != null && (
+                <p className="mt-1 text-xs text-slate-400">
+                  Km del día anterior: {formatNumero(ultimoKm)}
+                </p>
+              )}
+              {modo === 'terminar' && trackingAbierto && (
+                <p className="mt-1 text-xs text-slate-400">
+                  Km inicial de hoy: {formatNumero(trackingAbierto.start_km)}
+                </p>
+              )}
             </div>
 
             {error && <p className="text-sm text-red-600">{error}</p>}
