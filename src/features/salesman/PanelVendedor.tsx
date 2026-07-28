@@ -58,6 +58,11 @@ export function PanelVendedor() {
   // Si el vendedor no tiene el toggle activo, nada de esto aplica: puede registrar visitas y
   // demas sin haber "empezado el dia" primero (comportamiento de siempre, sin cambios).
   const diaIniciado = !profile?.daily_tracking_enabled || !!trackingHoy
+  const diaCerradoHoy = !!profile?.daily_tracking_enabled && !!trackingHoy && trackingHoy.ended_at != null
+  // Una vez que ya terminó su día, ya no debe poder registrar visitas ni ventas por envío
+  // (volverían a habilitarse mañana, al empezar un día nuevo) — gasolina y depósito no
+  // dependen de esto, se pueden seguir registrando igual.
+  const puedeVisitarYVender = !profile?.daily_tracking_enabled || (diaIniciado && !diaCerradoHoy)
 
   const visitasQuery = useQuery({
     queryKey: ['visitas', semana?.id],
@@ -178,14 +183,24 @@ export function PanelVendedor() {
             </div>
           ) : (
             <>
-              <button type="button" onClick={() => setModalVisita(true)} className="btn-primary w-full py-3.5">
-                <IconTiendas width={20} height={20} /> Registrar visita a tienda
-              </button>
+              {diaCerradoHoy && (
+                <p className="text-center text-xs text-slate-400">
+                  Ya terminaste tu día — no puedes registrar visitas ni ventas por envío hasta mañana.
+                </p>
+              )}
 
-              <div className="grid grid-cols-3 gap-2">
-                <button type="button" onClick={() => setModalEnvio(true)} className="btn-secondary py-3 text-sm">
-                  📦 Envío
+              {puedeVisitarYVender && (
+                <button type="button" onClick={() => setModalVisita(true)} className="btn-primary w-full py-3.5">
+                  <IconTiendas width={20} height={20} /> Registrar visita a tienda
                 </button>
+              )}
+
+              <div className={`grid gap-2 ${puedeVisitarYVender ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                {puedeVisitarYVender && (
+                  <button type="button" onClick={() => setModalEnvio(true)} className="btn-secondary py-3 text-sm">
+                    📦 Envío
+                  </button>
+                )}
                 <button type="button" onClick={() => setModalGasolina(true)} className="btn-secondary py-3 text-sm">
                   ⛽ Gasolina
                 </button>
