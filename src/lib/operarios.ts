@@ -104,7 +104,10 @@ export interface VentaOperario {
   photoPath: string | null
   createdAt: string
   processed: boolean
+  storeId: string | null
   storeName: string | null
+  /** Nombre del cliente/dueño de la tienda (null en ventas por envío, que no tienen tienda). */
+  clientName: string | null
   salesmanId: string
   salesmanName: string
   country: CountryCode | null
@@ -119,7 +122,9 @@ interface FilaVentaOperario {
   created_at: string
   processed: boolean
   visits: {
+    store_id: string | null
     store_name: string | null
+    stores: { client_name: string | null } | null
     weeks: {
       id: string
       status: WeekStatus
@@ -157,7 +162,7 @@ export async function obtenerVentasOperario(): Promise<VentaOperario[]> {
     supabase
       .from('sales')
       .select(
-        'id, amount, photo_path, created_at, processed, visits(store_name, weeks(id, status, salesman_id, profiles(full_name, country)))',
+        'id, amount, photo_path, created_at, processed, visits(store_id, store_name, stores(client_name), weeks(id, status, salesman_id, profiles(full_name, country)))',
       )
       .order('created_at', { ascending: false }),
     supabase
@@ -181,7 +186,9 @@ export async function obtenerVentasOperario(): Promise<VentaOperario[]> {
         photoPath: fila.photo_path,
         createdAt: fila.created_at,
         processed: fila.processed,
+        storeId: fila.visits?.store_id ?? null,
         storeName: fila.visits?.store_name ?? null,
+        clientName: fila.visits?.stores?.client_name ?? null,
         salesmanId: semana.salesman_id,
         salesmanName: semana.profiles?.full_name ?? 'Vendedor',
         country: semana.profiles?.country ?? null,
@@ -202,7 +209,9 @@ export async function obtenerVentasOperario(): Promise<VentaOperario[]> {
         photoPath: fila.photo_path,
         createdAt: fila.created_at,
         processed: fila.processed,
+        storeId: null,
         storeName: `📦 ${fila.client_name}`,
+        clientName: null,
         salesmanId: semana.salesman_id,
         salesmanName: semana.profiles?.full_name ?? 'Vendedor',
         country: semana.profiles?.country ?? null,
@@ -246,5 +255,33 @@ export async function marcarVentaProcesada(
       processed_by: procesada ? operarioId : null,
     })
     .eq('id', saleId)
+  if (error) throw error
+}
+
+// Código del negocio ------------------------------------------------------
+
+/** El código que el operario usa para esta tienda en su propio sistema. Vive en su propia
+ * tabla (nunca visible para el vendedor, ver 0032_codigo_tienda.sql) — null si todavía nadie
+ * lo ha registrado. */
+export async function obtenerCodigoTienda(storeId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('store_codes')
+    .select('codigo')
+    .eq('store_id', storeId)
+    .maybeSingle()
+  if (error) throw error
+  return data?.codigo ?? null
+}
+
+/** Registra el código la primera vez que un operario lo tiene a mano para esta tienda. Un
+ * segundo operario que la atienda después ya lo ve en vez de tener que volver a pedirlo. */
+export async function establecerCodigoTienda(
+  storeId: string,
+  codigo: string,
+  operarioId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('store_codes')
+    .insert({ store_id: storeId, codigo, set_by: operarioId })
   if (error) throw error
 }

@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../lib/useAuth'
 import {
   obtenerVentasOperario,
   obtenerVendedoresAsignados,
   marcarVentaProcesada,
+  obtenerCodigoTienda,
+  establecerCodigoTienda,
   type VentaOperario,
 } from '../../lib/operarios'
 import { formatMonto } from '../../lib/currency'
@@ -28,14 +30,33 @@ export function PanelOperario() {
   const [fotoZoomAbierta, setFotoZoomAbierta] = useState(false)
   const [procesando, setProcesando] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [codigoInput, setCodigoInput] = useState('')
   // Pop-up de "¿estás seguro?" aparte, no un botón que cambia de texto: así el corte es
   // inconfundible en vez de depender de que alguien note que el mismo botón se armó. `true`
   // = confirmando marcar como procesada, `false` = confirmando revertir a pendiente, `null` =
   // cerrado. Evita que una venta se procese sin querer (le pasó con una de Ulises).
   const [accionAConfirmar, setAccionAConfirmar] = useState<boolean | null>(null)
 
+  useEffect(() => {
+    setCodigoInput('')
+  }, [ventaSeleccionada?.id])
+
   async function confirmarAccion() {
     if (!ventaSeleccionada || accionAConfirmar === null) return
+    // Solo al marcar como procesada (no al revertir) hace falta fijar el código, y solo si la
+    // tienda todavía no tenía uno guardado.
+    if (accionAConfirmar && ventaSeleccionada.storeId && !codigoQuery.data && codigoInput.trim()) {
+      setError(null)
+      setProcesando(ventaSeleccionada.id)
+      try {
+        await establecerCodigoTienda(ventaSeleccionada.storeId, codigoInput.trim(), profile!.id)
+        await queryClient.invalidateQueries({ queryKey: ['codigo-tienda', ventaSeleccionada.storeId] })
+      } catch (e) {
+        setError((e as Error).message)
+        setProcesando(null)
+        return
+      }
+    }
     await marcar(ventaSeleccionada, accionAConfirmar)
     setAccionAConfirmar(null)
     setVentaSeleccionada(null)
@@ -48,6 +69,11 @@ export function PanelOperario() {
   const ventasQuery = useQuery({
     queryKey: ['ventas-operario'],
     queryFn: obtenerVentasOperario,
+  })
+  const codigoQuery = useQuery({
+    queryKey: ['codigo-tienda', ventaSeleccionada?.storeId],
+    queryFn: () => obtenerCodigoTienda(ventaSeleccionada!.storeId!),
+    enabled: !!ventaSeleccionada?.storeId,
   })
 
   async function marcar(venta: VentaOperario, procesada: boolean) {
@@ -162,6 +188,9 @@ export function PanelOperario() {
                   <p className="truncate font-semibold text-slate-900">
                     {venta.storeName || 'Tienda sin nombre'}
                   </p>
+                  {venta.clientName && (
+                    <p className="truncate text-xs text-slate-500">{venta.clientName}</p>
+                  )}
                   <p className="truncate text-xs text-slate-400">
                     {venta.salesmanName} ·{' '}
                     {new Date(venta.createdAt).toLocaleString('es-GT', {
@@ -191,6 +220,7 @@ export function PanelOperario() {
                 <tr>
                   <th className="px-4 py-3 font-medium">Foto</th>
                   <th className="px-4 py-3 font-medium">Tienda</th>
+                  <th className="px-4 py-3 font-medium">Cliente</th>
                   <th className="px-4 py-3 font-medium">Vendedor</th>
                   <th className="px-4 py-3 font-medium">Fecha</th>
                   <th className="px-4 py-3 font-medium">Monto</th>
@@ -221,6 +251,7 @@ export function PanelOperario() {
                     <td className="px-4 py-3 font-medium text-slate-900">
                       {venta.storeName || 'Tienda sin nombre'}
                     </td>
+                    <td className="px-4 py-3 text-slate-500">{venta.clientName || '—'}</td>
                     <td className="px-4 py-3 text-slate-500">{venta.salesmanName}</td>
                     <td className="px-4 py-3 text-slate-500">
                       {new Date(venta.createdAt).toLocaleString('es-GT', {
@@ -288,6 +319,12 @@ export function PanelOperario() {
                   {ventaSeleccionada.storeName || 'Tienda sin nombre'}
                 </span>
               </p>
+              {ventaSeleccionada.clientName && (
+                <p className="flex justify-between">
+                  <span className="text-slate-400">Cliente</span>
+                  <span className="font-semibold text-slate-900">{ventaSeleccionada.clientName}</span>
+                </p>
+              )}
               <p className="flex justify-between">
                 <span className="text-slate-400">Vendedor</span>
                 <span className="font-semibold text-slate-900">{ventaSeleccionada.salesmanName}</span>
@@ -311,6 +348,30 @@ export function PanelOperario() {
                 </span>
               </p>
             </div>
+
+            {ventaSeleccionada.storeId && (
+              <div className="rounded-lg bg-slate-50 p-3">
+                <p className="mb-1 text-xs font-medium text-slate-500">Código del negocio</p>
+                {codigoQuery.isLoading ? (
+                  <p className="text-sm text-slate-400">Buscando...</p>
+                ) : codigoQuery.data ? (
+                  <p className="text-lg font-bold tracking-wide text-slate-900">{codigoQuery.data}</p>
+                ) : (
+                  <>
+                    <input
+                      type="text"
+                      value={codigoInput}
+                      onChange={(e) => setCodigoInput(e.target.value)}
+                      placeholder="Esta tienda no tiene código todavía — ingrésalo"
+                      className="input-field text-base"
+                    />
+                    <p className="mt-1 text-xs text-slate-400">
+                      Se guarda para esta tienda: la próxima vez ya no hay que volver a escribirlo.
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
 
             {ventaSeleccionada.processed ? (
               <div className="space-y-2">
@@ -336,11 +397,17 @@ export function PanelOperario() {
                   <button
                     type="button"
                     onClick={() => setAccionAConfirmar(true)}
+                    disabled={
+                      !!ventaSeleccionada.storeId && !codigoQuery.data && !codigoInput.trim()
+                    }
                     className="btn-primary btn-sm flex-1"
                   >
                     Sí, procesar
                   </button>
                 </div>
+                {ventaSeleccionada.storeId && !codigoQuery.data && !codigoInput.trim() && (
+                  <p className="text-xs text-amber-600">Ingresa el código del negocio para poder procesarla.</p>
+                )}
               </div>
             )}
           </div>
