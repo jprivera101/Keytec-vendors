@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../lib/useAuth'
-import { obtenerSemanaActiva } from '../../lib/api'
+import { obtenerSemanaActiva, obtenerTrackingDeSemana } from '../../lib/api'
+import { fechaLocalISO } from '../../lib/fechas'
 import { Spinner } from '../../components/Spinner'
 import { ResumenRuta } from './ResumenRuta'
 import { NuevaVentaModal } from './NuevaVentaModal'
@@ -18,9 +19,19 @@ export function MiRuta() {
     queryFn: () => obtenerSemanaActiva(userId),
   })
 
-  if (semanaQuery.isLoading) return <Spinner texto="Cargando tu ruta..." />
-
   const semana = semanaQuery.data
+
+  const trackingSemanaQuery = useQuery({
+    queryKey: ['tracking-diario', semana?.id],
+    queryFn: () => obtenerTrackingDeSemana(semana!.id),
+    enabled: !!semana && !!profile?.daily_tracking_enabled,
+  })
+  const trackingHoy = (trackingSemanaQuery.data ?? []).find((t) => t.tracking_date === fechaLocalISO())
+  // Igual que en Inicio: si tiene el toggle de tracking diario, solo puede agregar ventas
+  // mientras su día siga abierto (empezado y sin terminar todavía).
+  const puedeVisitarYVender = !profile?.daily_tracking_enabled || (!!trackingHoy && trackingHoy.ended_at == null)
+
+  if (semanaQuery.isLoading) return <Spinner texto="Cargando tu ruta..." />
 
   if (!semana) {
     return (
@@ -50,7 +61,7 @@ export function MiRuta() {
 
       <ResumenRuta
         weekId={semana.id}
-        puedeAgregarVenta={semana.status === 'active'}
+        puedeAgregarVenta={semana.status === 'active' && puedeVisitarYVender}
         onAgregarVenta={setVisitaParaVenta}
       />
 
