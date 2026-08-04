@@ -294,6 +294,7 @@ export function PanelVendedor() {
           modo={trackingAbierto ? 'terminar' : 'empezar'}
           weekId={semana.id}
           userId={userId}
+          weekStartKm={semana.start_mileage_km}
           trackingAbierto={trackingAbierto}
           onCerrar={() => setModalTracking(false)}
           onListo={() => {

@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   obtenerSemanaPorId,
   obtenerVisitasConVentas,
@@ -7,11 +7,13 @@ import {
   obtenerVentasEnvioDeSemana,
   obtenerParqueosDeSemana,
   obtenerTrackingDeSemana,
+  editarKmSemana,
 } from '../../lib/api'
 import { formatMonto } from '../../lib/currency'
 import { formatNumero } from '../../lib/numeros'
 import { Spinner } from '../../components/Spinner'
 import { FotoPrivada } from '../../components/FotoPrivada'
+import { VisorFotoZoom } from '../../components/VisorFotoZoom'
 import { Modal } from '../../components/Modal'
 import { IconChevron } from '../../components/icons'
 import { MapaRuta } from './MapaRuta'
@@ -30,6 +32,7 @@ export function DetalleSemana({
   onAgregarVenta = () => {},
   puedeEditarGasolina = false,
   puedeReabrirTracking = false,
+  puedeEditarKm = false,
 }: {
   weekId: string
   tiendasRegion?: TiendaConLugar[]
@@ -38,7 +41,10 @@ export function DetalleSemana({
   onAgregarVenta?: (visitId: string) => void
   puedeEditarGasolina?: boolean
   puedeReabrirTracking?: boolean
+  /** Super admin: puede corregir un km mal tecleado (semana y tracking diario). */
+  puedeEditarKm?: boolean
 }) {
+  const queryClient = useQueryClient()
   const semanaQuery = useQuery({
     queryKey: ['semana', weekId],
     queryFn: () => obtenerSemanaPorId(weekId),
@@ -110,8 +116,22 @@ export function DetalleSemana({
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <FotoKilometraje etiqueta="Kilometraje inicial" km={semana.start_mileage_km} path={semana.start_mileage_photo_path} />
-        <FotoKilometraje etiqueta="Kilometraje final" km={semana.end_mileage_km} path={semana.end_mileage_photo_path} />
+        <FotoKilometraje
+          etiqueta="Kilometraje inicial"
+          km={semana.start_mileage_km}
+          path={semana.start_mileage_photo_path}
+          puedeEditar={puedeEditarKm}
+          onGuardar={(nuevoValor) => editarKmSemana(semana.id, nuevoValor, semana.end_mileage_km)}
+          onEditado={() => queryClient.invalidateQueries({ queryKey: ['semana', weekId] })}
+        />
+        <FotoKilometraje
+          etiqueta="Kilometraje final"
+          km={semana.end_mileage_km}
+          path={semana.end_mileage_photo_path}
+          puedeEditar={puedeEditarKm && semana.end_mileage_km != null}
+          onGuardar={(nuevoValor) => editarKmSemana(semana.id, semana.start_mileage_km, nuevoValor)}
+          onEditado={() => queryClient.invalidateQueries({ queryKey: ['semana', weekId] })}
+        />
       </div>
 
       <MapaRuta visitas={visitas} tiendasRegion={tiendasRegion} country={country} parkingSpots={parqueos} />
@@ -150,7 +170,12 @@ export function DetalleSemana({
       {tracking.length > 0 && (
         <SeccionColapsable titulo="🚗 Tracking diario" cantidad={tracking.length}>
           {tracking.map((dia) => (
-            <TrackingDiarioCard key={dia.id} tracking={dia} puedeReabrir={puedeReabrirTracking} />
+            <TrackingDiarioCard
+              key={dia.id}
+              tracking={dia}
+              puedeReabrir={puedeReabrirTracking}
+              puedeEditarKm={puedeEditarKm}
+            />
           ))}
         </SeccionColapsable>
       )}
@@ -239,28 +264,100 @@ function FotoKilometraje({
   etiqueta,
   km,
   path,
+  puedeEditar = false,
+  onGuardar,
+  onEditado,
 }: {
   etiqueta: string
   km: number | null
   path: string | null
+  puedeEditar?: boolean
+  onGuardar?: (nuevoValor: number) => Promise<unknown>
+  onEditado?: () => void
 }) {
+  const [ampliada, setAmpliada] = useState(false)
+  const [editando, setEditando] = useState(false)
+  const [valor, setValor] = useState('')
+  const [guardando, setGuardando] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  function abrirEdicion() {
+    setValor(km != null ? String(km) : '')
+    setError(null)
+    setEditando(true)
+  }
+
+  async function guardar() {
+    const nuevoValor = Number(valor)
+    if (!valor || Number.isNaN(nuevoValor) || nuevoValor < 0) {
+      setError('Ingresa un kilometraje válido')
+      return
+    }
+    setGuardando(true)
+    setError(null)
+    try {
+      await onGuardar?.(nuevoValor)
+      onEditado?.()
+      setEditando(false)
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setGuardando(false)
+    }
+  }
+
   return (
     <div className="card p-3">
-      <p className="mb-2 text-xs text-slate-400">
-        {etiqueta} {km != null && <span className="font-semibold text-slate-700">· {formatNumero(km)} km</span>}
-      </p>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-xs text-slate-400">
+          {etiqueta} {km != null && <span className="font-semibold text-slate-700">· {formatNumero(km)} km</span>}
+        </p>
+        {puedeEditar && (
+          <button type="button" onClick={abrirEdicion} className="text-xs font-medium text-brand-700 hover:underline">
+            ✏️ Editar
+          </button>
+        )}
+      </div>
       {path ? (
-        <FotoPrivada
-          bucket="mileage-photos"
-          path={path}
-          alt={etiqueta}
-          className="h-32 w-full rounded-lg object-cover"
-        />
+        <>
+          <button type="button" onClick={() => setAmpliada(true)} className="block w-full">
+            <FotoPrivada
+              bucket="mileage-photos"
+              path={path}
+              alt={etiqueta}
+              className="h-32 w-full rounded-lg object-cover"
+            />
+          </button>
+          <VisorFotoZoom
+            bucket="mileage-photos"
+            path={path}
+            alt={etiqueta}
+            abierto={ampliada}
+            onCerrar={() => setAmpliada(false)}
+          />
+        </>
       ) : (
         <div className="flex h-32 items-center justify-center rounded-lg bg-slate-100 text-xs text-slate-400">
           Sin foto
         </div>
       )}
+
+      <Modal titulo={`Editar ${etiqueta.toLowerCase()}`} abierto={editando} onCerrar={() => setEditando(false)}>
+        <div className="space-y-3">
+          <input
+            type="number"
+            inputMode="decimal"
+            autoFocus
+            value={valor}
+            onChange={(e) => setValor(e.target.value)}
+            className="input-field text-base"
+          />
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <button type="button" onClick={guardar} disabled={guardando} className="btn-primary w-full py-2.5">
+            {guardando ? 'Guardando...' : 'Guardar'}
+          </button>
+        </div>
+      </Modal>
     </div>
   )
 }

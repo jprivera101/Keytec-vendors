@@ -5,6 +5,8 @@
 // origen real de la app (mas localhost para desarrollo).
 const ALLOWED_ORIGINS = [
   "https://eurocell-app-ventas.vercel.app",
+  "https://keytec.app",
+  "https://www.keytec.app",
   "http://localhost:5173",
   "http://localhost:4173",
 ];

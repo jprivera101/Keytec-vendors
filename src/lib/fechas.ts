@@ -10,3 +10,31 @@ export function fechaLocalISO(fecha: Date | string = new Date()): string {
   const dia = String(d.getDate()).padStart(2, '0')
   return `${anio}-${mes}-${dia}`
 }
+
+/** Lunes local (00:00) de la semana calendario (lunes-domingo) que contiene `fecha`. */
+export function lunesDeLaSemana(fecha: Date = new Date()): Date {
+  const diasDesdeElLunes = (fecha.getDay() + 6) % 7
+  return new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate() - diasDesdeElLunes)
+}
+
+/** Limites [lunes 00:00, lunes siguiente 00:00) de la semana calendario que contiene `fecha`
+ * -- para filtrar "toda la semana, lunes a domingo" sin depender de las semanas propias de
+ * cada vendedor (que empiezan cuando el vendedor decide, no siempre un lunes). */
+export function limitesSemanaCalendario(fecha: Date = new Date()): { desde: Date; hasta: Date } {
+  const desde = lunesDeLaSemana(fecha)
+  const hasta = new Date(desde.getFullYear(), desde.getMonth(), desde.getDate() + 7)
+  return { desde, hasta }
+}
+
+/** Todos los lunes cuya semana (lunes-domingo) toca el mes dado -- para armar el selector de
+ * "semana" de la vista de mapa por país sin atarse a las semanas propias de cada vendedor. */
+export function semanasCalendarioDeMes(anio: number, mes: number): Date[] {
+  const ultimoDiaMes = new Date(anio, mes + 1, 0)
+  const lunes: Date[] = []
+  let cursor = lunesDeLaSemana(new Date(anio, mes, 1))
+  while (cursor <= ultimoDiaMes) {
+    lunes.push(cursor)
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 7)
+  }
+  return lunes
+}

@@ -13,6 +13,10 @@ interface Props {
   modo: 'empezar' | 'terminar'
   weekId: string
   userId: string
+  /** Km con el que arrancó la semana (foto inicial). El primer día no puede empezar con
+   * menos que esto — si no hubo ningún día previo, obtenerUltimoKmTracking no tiene nada
+   * contra qué comparar y dejaba pasar cualquier valor. */
+  weekStartKm: number
   /** Requerido cuando modo es 'terminar': el registro del día que se está cerrando. */
   trackingAbierto?: DailyTracking | null
   onCerrar: () => void
@@ -29,6 +33,7 @@ export function TrackingDiarioModal({
   modo,
   weekId,
   userId,
+  weekStartKm,
   trackingAbierto,
   onCerrar,
   onListo,
@@ -72,6 +77,10 @@ export function TrackingDiarioModal({
     }
     if (modo === 'empezar' && ultimoKm != null && valor < ultimoKm) {
       setError(`El km inicial no puede ser menor al del día anterior (${formatNumero(ultimoKm)})`)
+      return
+    }
+    if (modo === 'empezar' && valor < weekStartKm) {
+      setError(`El km inicial no puede ser menor al del inicio de semana (${formatNumero(weekStartKm)})`)
       return
     }
     setError(null)
@@ -124,6 +133,11 @@ export function TrackingDiarioModal({
               {modo === 'empezar' && ultimoKm != null && (
                 <p className="mt-1 text-xs text-slate-400">
                   Km del día anterior: {formatNumero(ultimoKm)}
+                </p>
+              )}
+              {modo === 'empezar' && (
+                <p className="mt-1 text-xs text-slate-400">
+                  Km de inicio de semana: {formatNumero(weekStartKm)}
                 </p>
               )}
               {modo === 'terminar' && trackingAbierto && (

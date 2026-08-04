@@ -103,6 +103,21 @@ export async function obtenerSemanaPorId(weekId: string): Promise<Week> {
   return data
 }
 
+/** Super admin: corrige el km inicial/final de la semana sin borrar el cierre ni sus fotos. */
+export async function editarKmSemana(
+  weekId: string,
+  startMileageKm: number,
+  endMileageKm: number | null,
+): Promise<Week> {
+  const { data, error } = await supabase.rpc('editar_km_semana', {
+    p_week_id: weekId,
+    p_start_mileage_km: startMileageKm,
+    p_end_mileage_km: endMileageKm,
+  })
+  if (error) throw error
+  return data
+}
+
 // Visitas y ventas -----------------------------------------------------
 
 export async function crearVisita(input: {
@@ -137,6 +152,40 @@ export async function obtenerVisitasConVentas(weekId: string): Promise<VisitWith
     .order('captured_at', { ascending: true })
   if (error) throw error
   return data as VisitWithSales[]
+}
+
+export interface VisitaConVendedor extends VisitWithSales {
+  salesman_id: string
+}
+
+/** Todas las visitas de un país en un rango de fechas, sin importar a qué semana (propia de
+ * cada vendedor) pertenezcan -- para la vista de mapa "todas las regiones", que compara
+ * varios vendedores en la misma semana calendario (lunes-domingo) en vez de sus semanas
+ * individuales (que empiezan cuando cada uno decide). */
+export async function obtenerVisitasPorPaisYRango(
+  pais: CountryCode,
+  desde: Date,
+  hasta: Date,
+): Promise<VisitaConVendedor[]> {
+  const { data: semanasDelPais, error: semanasError } = await supabase
+    .from('weeks')
+    .select('id, salesman_id, profiles!inner(country)')
+    .eq('profiles.country', pais)
+  if (semanasError) throw semanasError
+  if (!semanasDelPais || semanasDelPais.length === 0) return []
+
+  const salesmanPorSemana = new Map(semanasDelPais.map((s) => [s.id, s.salesman_id]))
+
+  const { data: visitas, error } = await supabase
+    .from('visits')
+    .select('*, sales(*)')
+    .in('week_id', Array.from(salesmanPorSemana.keys()))
+    .gte('captured_at', desde.toISOString())
+    .lt('captured_at', hasta.toISOString())
+    .order('captured_at', { ascending: true })
+  if (error) throw error
+
+  return (visitas as VisitWithSales[]).map((v) => ({ ...v, salesman_id: salesmanPorSemana.get(v.week_id)! }))
 }
 
 // Gasolina -------------------------------------------------------------
@@ -353,6 +402,21 @@ export async function reabrirTrackingDiario(id: string): Promise<void> {
     .update({ end_km: null, end_photo_path: null, ended_at: null })
     .eq('id', id)
   if (error) throw error
+}
+
+/** Super admin: corrige un km mal tecleado sin borrar el cierre del día ni sus fotos. */
+export async function editarKmTrackingDiario(
+  id: string,
+  startKm: number,
+  endKm: number | null,
+): Promise<DailyTracking> {
+  const { data, error } = await supabase.rpc('editar_km_tracking_diario', {
+    p_id: id,
+    p_start_km: startKm,
+    p_end_km: endKm,
+  })
+  if (error) throw error
+  return data
 }
 
 export async function obtenerTrackingDeSemana(weekId: string): Promise<DailyTracking[]> {

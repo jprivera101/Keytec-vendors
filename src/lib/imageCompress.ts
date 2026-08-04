@@ -1,5 +1,5 @@
-const MAX_DIMENSION = 1600
-const JPEG_QUALITY = 0.7
+const MAX_DIMENSION = 1920
+const JPEG_QUALITY = 0.82
 
 /** Redimensiona y comprime una imagen en el navegador antes de subirla (ahorra datos moviles). */
 export async function comprimirImagen(archivo: Blob): Promise<Blob> {

@@ -18,6 +18,9 @@ export function CamaraCaptura({ etiqueta, onCapturada }: Props) {
   const [estado, setEstado] = useState<Estado>('inactiva')
   const [error, setError] = useState<string | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [camaraLista, setCamaraLista] = useState(false)
+  const [soportaEnfoque, setSoportaEnfoque] = useState(false)
+  const [enfocando, setEnfocando] = useState(false)
 
   useEffect(() => {
     return () => detenerCamara()
@@ -42,13 +45,34 @@ export function CamaraCaptura({ etiqueta, onCapturada }: Props) {
   async function activarCamara() {
     setError(null)
     setEstado('activando')
+    setCamaraLista(false)
+    setSoportaEnfoque(false)
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
+        video: {
+          facingMode: 'environment',
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
         audio: false,
       })
       streamRef.current = stream
       setEstado('en_vivo')
+
+      // Enfoque continuo (mejor nitidez y evita que la camara quede fija en un enfoque
+      // borroso). No todos los navegadores lo soportan, es un intento best-effort.
+      const track = stream.getVideoTracks()[0]
+      const capacidades = track?.getCapabilities?.() as (MediaTrackCapabilities & { focusMode?: string[] }) | undefined
+      if (capacidades?.focusMode?.includes('continuous')) {
+        try {
+          await track.applyConstraints({ advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet] })
+        } catch {
+          // ignorar: el intento de enfoque continuo es opcional
+        }
+      }
+      if (capacidades?.focusMode?.includes('single-shot')) {
+        setSoportaEnfoque(true)
+      }
     } catch (e) {
       const err = e as DOMException
       if (err.name === 'NotAllowedError') {
@@ -62,9 +86,25 @@ export function CamaraCaptura({ etiqueta, onCapturada }: Props) {
     }
   }
 
+  async function enfocar() {
+    const track = streamRef.current?.getVideoTracks()[0]
+    if (!track || !soportaEnfoque) return
+    setEnfocando(true)
+    try {
+      await track.applyConstraints({ advanced: [{ focusMode: 'single-shot' } as MediaTrackConstraintSet] })
+    } catch {
+      // ignorar: el intento de reenfoque es opcional
+    } finally {
+      setTimeout(() => setEnfocando(false), 400)
+    }
+  }
+
   function tomarFoto() {
     const video = videoRef.current
-    if (!video) return
+    // Si el video todavia no tiene un frame real (dimensiones en 0 o sin datos), el canvas
+    // queda transparente y toBlob('image/jpeg') lo rellena de negro: es la causa de las
+    // fotos completamente negras. Hay que esperar a que la camara este realmente lista.
+    if (!video || !camaraLista || video.videoWidth === 0 || video.videoHeight === 0) return
     const canvas = document.createElement('canvas')
     canvas.width = video.videoWidth
     canvas.height = video.videoHeight
@@ -79,7 +119,7 @@ export function CamaraCaptura({ etiqueta, onCapturada }: Props) {
         onCapturada(blob)
       },
       'image/jpeg',
-      0.9,
+      0.92,
     )
   }
 
@@ -106,16 +146,31 @@ export function CamaraCaptura({ etiqueta, onCapturada }: Props) {
   if (estado === 'en_vivo') {
     return (
       <div>
-        <video
-          ref={videoRef}
-          playsInline
-          muted
-          className="h-64 w-full rounded-xl bg-slate-900 object-cover"
-        />
+        <div className="relative">
+          <video
+            ref={videoRef}
+            playsInline
+            muted
+            onLoadedData={() => setCamaraLista(true)}
+            onClick={soportaEnfoque ? enfocar : undefined}
+            className="h-64 w-full rounded-xl bg-slate-900 object-cover"
+          />
+          {!camaraLista && (
+            <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-slate-900/60 text-sm text-white">
+              Preparando cámara...
+            </div>
+          )}
+          {camaraLista && soportaEnfoque && (
+            <div className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/50 px-3 py-1 text-xs text-white">
+              {enfocando ? 'Enfocando...' : 'Toca la imagen para enfocar'}
+            </div>
+          )}
+        </div>
         <button
           type="button"
           onClick={tomarFoto}
-          className="mt-2 w-full rounded-lg bg-brand-700 py-2.5 text-sm font-semibold text-white"
+          disabled={!camaraLista}
+          className="mt-2 w-full rounded-lg bg-brand-700 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
         >
           📸 Tomar foto
         </button>

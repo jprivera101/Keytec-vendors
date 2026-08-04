@@ -4,13 +4,15 @@ import { FotoPrivada } from '../../components/FotoPrivada'
 import { Modal } from '../../components/Modal'
 import { IconChevron } from '../../components/icons'
 import { formatNumero } from '../../lib/numeros'
-import { reabrirTrackingDiario } from '../../lib/api'
+import { reabrirTrackingDiario, editarKmTrackingDiario } from '../../lib/api'
 import type { DailyTracking } from '../../lib/types'
 
 interface Props {
   tracking: DailyTracking
   /** Si el admin puede deshacer el cierre de este día (el vendedor cerró por error). */
   puedeReabrir?: boolean
+  /** Super admin: puede corregir un km mal tecleado sin borrar el cierre ni las fotos. */
+  puedeEditarKm?: boolean
 }
 
 function formatearFecha(fecha: string) {
@@ -23,13 +25,18 @@ function formatearFecha(fecha: string) {
 
 /** Fila compacta (🚗 + fecha + km recorridos); expande para ver las fotos del carro al
  * empezar y terminar el día (la del final solo si ya se cerró ese día). */
-export function TrackingDiarioCard({ tracking, puedeReabrir = false }: Props) {
+export function TrackingDiarioCard({ tracking, puedeReabrir = false, puedeEditarKm = false }: Props) {
   const queryClient = useQueryClient()
   const [expandido, setExpandido] = useState(false)
   const [fotoAmpliada, setFotoAmpliada] = useState<'inicio' | 'fin' | null>(null)
   const [confirmandoReabrir, setConfirmandoReabrir] = useState(false)
   const [reabriendo, setReabriendo] = useState(false)
   const [errorReabrir, setErrorReabrir] = useState<string | null>(null)
+  const [editandoKm, setEditandoKm] = useState(false)
+  const [startKmEditado, setStartKmEditado] = useState('')
+  const [endKmEditado, setEndKmEditado] = useState('')
+  const [guardandoKm, setGuardandoKm] = useState(false)
+  const [errorKm, setErrorKm] = useState<string | null>(null)
   const cerrado = tracking.end_km != null
 
   async function manejarReabrir() {
@@ -43,6 +50,41 @@ export function TrackingDiarioCard({ tracking, puedeReabrir = false }: Props) {
       setErrorReabrir((e as Error).message)
     } finally {
       setReabriendo(false)
+    }
+  }
+
+  function abrirEdicionKm() {
+    setStartKmEditado(String(tracking.start_km))
+    setEndKmEditado(cerrado ? String(tracking.end_km) : '')
+    setErrorKm(null)
+    setEditandoKm(true)
+  }
+
+  async function guardarKm() {
+    const nuevoStart = Number(startKmEditado)
+    const nuevoEnd = cerrado ? Number(endKmEditado) : null
+    if (!startKmEditado || Number.isNaN(nuevoStart) || nuevoStart < 0) {
+      setErrorKm('Ingresa un km inicial válido')
+      return
+    }
+    if (cerrado && (!endKmEditado || Number.isNaN(nuevoEnd) || (nuevoEnd as number) < 0)) {
+      setErrorKm('Ingresa un km final válido')
+      return
+    }
+    if (nuevoEnd != null && nuevoEnd < nuevoStart) {
+      setErrorKm('El km final no puede ser menor al inicial')
+      return
+    }
+    setGuardandoKm(true)
+    setErrorKm(null)
+    try {
+      await editarKmTrackingDiario(tracking.id, nuevoStart, nuevoEnd)
+      await queryClient.invalidateQueries({ queryKey: ['tracking-diario', tracking.week_id] })
+      setEditandoKm(false)
+    } catch (e) {
+      setErrorKm((e as Error).message)
+    } finally {
+      setGuardandoKm(false)
     }
   }
 
@@ -101,6 +143,18 @@ export function TrackingDiarioCard({ tracking, puedeReabrir = false }: Props) {
             </div>
           )}
 
+          {puedeEditarKm && (
+            <div className="col-span-2">
+              <button
+                type="button"
+                onClick={abrirEdicionKm}
+                className="text-xs font-medium text-brand-700 hover:underline"
+              >
+                ✏️ Editar km
+              </button>
+            </div>
+          )}
+
           {puedeReabrir && cerrado && (
             <div className="col-span-2">
               {!confirmandoReabrir ? (
@@ -155,6 +209,38 @@ export function TrackingDiarioCard({ tracking, puedeReabrir = false }: Props) {
             className="max-h-[70vh] w-full rounded-lg object-contain"
           />
         )}
+      </Modal>
+
+      <Modal titulo="Editar kilometraje del día" abierto={editandoKm} onCerrar={() => setEditandoKm(false)}>
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Km inicial</label>
+            <input
+              type="number"
+              inputMode="decimal"
+              autoFocus
+              value={startKmEditado}
+              onChange={(e) => setStartKmEditado(e.target.value)}
+              className="input-field text-base"
+            />
+          </div>
+          {cerrado && (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Km final</label>
+              <input
+                type="number"
+                inputMode="decimal"
+                value={endKmEditado}
+                onChange={(e) => setEndKmEditado(e.target.value)}
+                className="input-field text-base"
+              />
+            </div>
+          )}
+          {errorKm && <p className="text-sm text-red-600">{errorKm}</p>}
+          <button type="button" onClick={guardarKm} disabled={guardandoKm} className="btn-primary w-full py-2.5">
+            {guardandoKm ? 'Guardando...' : 'Guardar'}
+          </button>
+        </div>
       </Modal>
     </div>
   )

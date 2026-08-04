@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { obtenerSemanasDeVendedor, obtenerVendedores } from '../../lib/api'
+import { obtenerSemanasDeVendedor, obtenerVendedores, obtenerVisitasPorPaisYRango } from '../../lib/api'
 import { obtenerTiendasPorRegion } from '../../lib/tiendas'
 import { obtenerRegionesPorPais } from '../../lib/regiones'
+import { fechaLocalISO, lunesDeLaSemana, limitesSemanaCalendario, semanasCalendarioDeMes } from '../../lib/fechas'
 import { Spinner } from '../../components/Spinner'
 import { BuscadorVendedor } from '../../components/BuscadorVendedor'
 import { PageHeader } from '../../components/PageHeader'
 import { IconAnalitica, IconChevron } from '../../components/icons'
 import { DetalleSemana } from '../shared/DetalleSemana'
+import { MapaMultiVendedor } from './MapaMultiVendedor'
 import { NOMBRE_PAIS, type AdminOutletContext } from './AdminLayout'
 import type { CountryCode } from '../../lib/types'
 
@@ -18,7 +20,7 @@ const MESES = [
 ]
 
 export function AnaliticaAdmin() {
-  const { pais } = useOutletContext<AdminOutletContext>()
+  const { pais, profile } = useOutletContext<AdminOutletContext>()
   const { salesmanId, weekId } = useParams<{ salesmanId?: string; weekId?: string }>()
   const navigate = useNavigate()
 
@@ -29,6 +31,14 @@ export function AnaliticaAdmin() {
   const [anioFiltro, setAnioFiltro] = useState<number | 'ALL'>('ALL')
   const [mesFiltro, setMesFiltro] = useState<number | 'ALL'>('ALL')
   const [filtrosAbiertos, setFiltrosAbiertos] = useState(false)
+
+  // Vista "todas las regiones" sin vendedor elegido: mapa comparativo de varios vendedores
+  // a la vez. Usa semana calendario (lunes-domingo), no la semana propia de cada vendedor
+  // (que empieza cuando cada uno decide), porque el punto es comparar el mismo período.
+  const hoy = new Date()
+  const [anioMultiFiltro, setAnioMultiFiltro] = useState(hoy.getFullYear())
+  const [mesMultiFiltro, setMesMultiFiltro] = useState(hoy.getMonth())
+  const [semanaMultiInicio, setSemanaMultiInicio] = useState(fechaLocalISO(lunesDeLaSemana(hoy)))
 
   const regionesQuery = useQuery({
     queryKey: ['regiones-analitica', pais],
@@ -73,10 +83,35 @@ export function AnaliticaAdmin() {
     return true
   })
 
+  const vistaMulti = regionId === 'ALL' && !salesmanId
+  const semanasMultiDisponibles = semanasCalendarioDeMes(anioMultiFiltro, mesMultiFiltro)
+  const rangoMulti = limitesSemanaCalendario(new Date(`${semanaMultiInicio}T00:00:00`))
+
+  const visitasMultiQuery = useQuery({
+    queryKey: ['visitas-multi-region', pais, semanaMultiInicio],
+    queryFn: () => obtenerVisitasPorPaisYRango(pais as CountryCode, rangoMulti.desde, rangoMulti.hasta),
+    enabled: vistaMulti && pais !== 'ALL',
+  })
+
+  const vendedoresConVisitas = (vendedoresQuery.data ?? []).map((v) => ({
+    id: v.id,
+    full_name: v.full_name,
+    visitas: (visitasMultiQuery.data ?? []).filter((visita) => visita.salesman_id === v.id),
+  }))
+
   // Si cambia el pais, la region elegida ya no aplica.
   useEffect(() => {
     setRegionId('')
   }, [pais])
+
+  // Si cambia año/mes en la vista multi-vendedor, la semana elegida puede quedar fuera del
+  // nuevo mes -- se cae a la primera semana disponible en vez de dejar una seleccion invalida.
+  useEffect(() => {
+    if (!semanasMultiDisponibles.some((lunes) => fechaLocalISO(lunes) === semanaMultiInicio)) {
+      setSemanaMultiInicio(fechaLocalISO(semanasMultiDisponibles[0]))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anioMultiFiltro, mesMultiFiltro])
 
   // Llegando por un link directo a un vendedor (sin haber elegido region todavia), se
   // reconoce su region automaticamente para no dejar la pantalla "vacia".
@@ -145,7 +180,9 @@ export function AnaliticaAdmin() {
 
           {regionId && (
             <div className="col-span-2 sm:col-span-1">
-              <label className="mb-1 block text-xs font-medium text-slate-500">Vendedor</label>
+              <label className="mb-1 block text-xs font-medium text-slate-500">
+                Vendedor {regionId === 'ALL' && '(opcional, para ver su detalle)'}
+              </label>
               <BuscadorVendedor
                 vendedores={vendedoresDeLaRegion}
                 valor={salesmanId ?? ''}
@@ -155,6 +192,59 @@ export function AnaliticaAdmin() {
             </div>
           )}
         </div>
+
+        {vistaMulti && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-500">Año</label>
+              <select
+                value={anioMultiFiltro}
+                onChange={(e) => setAnioMultiFiltro(Number(e.target.value))}
+                className="input-field"
+              >
+                {[hoy.getFullYear(), hoy.getFullYear() - 1].map((anio) => (
+                  <option key={anio} value={anio}>
+                    {anio}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-500">Mes</label>
+              <select
+                value={mesMultiFiltro}
+                onChange={(e) => setMesMultiFiltro(Number(e.target.value))}
+                className="input-field"
+              >
+                {MESES.map((nombre, i) => (
+                  <option key={nombre} value={i}>
+                    {nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-500">Semana</label>
+              <select
+                value={semanaMultiInicio}
+                onChange={(e) => setSemanaMultiInicio(e.target.value)}
+                className="input-field"
+              >
+                {semanasMultiDisponibles.map((lunes) => {
+                  const domingo = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + 6)
+                  return (
+                    <option key={fechaLocalISO(lunes)} value={fechaLocalISO(lunes)}>
+                      {lunes.toLocaleDateString('es-GT', { day: '2-digit', month: '2-digit' })} al{' '}
+                      {domingo.toLocaleDateString('es-GT', { day: '2-digit', month: '2-digit' })}
+                    </option>
+                  )
+                })}
+              </select>
+            </div>
+          </div>
+        )}
 
         {salesmanId && (
           <div>
@@ -237,6 +327,12 @@ export function AnaliticaAdmin() {
 
       {!regionId ? (
         <EstadoVacio texto="Elige una región para empezar." />
+      ) : vistaMulti ? (
+        visitasMultiQuery.isLoading ? (
+          <Spinner />
+        ) : (
+          <MapaMultiVendedor vendedores={vendedoresConVisitas} country={pais !== 'ALL' ? pais : null} />
+        )
       ) : !salesmanId ? (
         <EstadoVacio texto="Elige un vendedor para ver sus semanas." />
       ) : semanasQuery.isLoading ? (
@@ -252,6 +348,7 @@ export function AnaliticaAdmin() {
           country={vendedorSeleccionado?.country}
           puedeEditarGasolina
           puedeReabrirTracking
+          puedeEditarKm={profile.role === 'super_admin'}
         />
       ) : (
         <Spinner />
