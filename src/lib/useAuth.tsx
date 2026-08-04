@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabaseClient'
 import type { Profile, UserRole } from './types'
@@ -49,6 +50,7 @@ function limiteDe(rol: UserRole | null | undefined): number {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient()
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [cargando, setCargando] = useState(true)
@@ -57,6 +59,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // conocer el rol vigente para saber contra qué límite comparar; un ref evita tener que
   // recrear el intervalo cada vez que cambia el perfil.
   const rolActualRef = useRef<UserRole | null>(null)
+  // Detecta cambio de usuario (no solo refresh del mismo token) para saber cuándo limpiar
+  // el cache de React Query -- ver comentario en onAuthStateChange más abajo.
+  const usuarioActualRef = useRef<string | null>(null)
 
   async function cargarPerfil(userId: string) {
     const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single()
@@ -89,12 +94,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     supabase.auth.getSession().then(({ data }) => {
       if (!activo) return
+      usuarioActualRef.current = data.session?.user.id ?? null
       setSession(data.session)
       if (data.session) cargarPerfil(data.session.user.id)
       else setCargando(false)
     })
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, nuevaSesion) => {
+      const nuevoUsuarioId = nuevaSesion?.user.id ?? null
+      // Distinto de un simple refresh de token: es un logout, un login, o -- en un
+      // dispositivo compartido -- que ahora hay una persona distinta en la sesión. Sin
+      // limpiar el cache de React Query, las queries que no llevan el id del usuario en su
+      // key (p.ej. ventas del operario) alcanzan a mostrar por un instante datos del usuario
+      // anterior mientras se resuelve el fetch nuevo, ya correctamente filtrado por RLS.
+      if (nuevoUsuarioId !== usuarioActualRef.current) {
+        queryClient.clear()
+        usuarioActualRef.current = nuevoUsuarioId
+      }
       setSession(nuevaSesion)
       if (nuevaSesion) {
         cargarPerfil(nuevaSesion.user.id)
@@ -130,6 +146,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function cerrarSesion() {
+    // No hace falta esperar a onAuthStateChange para limpiar: mientras esa vuelta redonda
+    // resuelve, alguien podría alcanzar a ver un instante de datos del usuario que se va.
+    queryClient.clear()
+    usuarioActualRef.current = null
     await supabase.auth.signOut()
   }
 
