@@ -26,3 +26,17 @@ export async function obtenerUrlFirmada(bucket: BucketFotos, path: string, segun
   if (error) throw error
   return data.signedUrl
 }
+
+/** Descarga una foto privada al dispositivo (en vez de solo mostrarla) con el nombre dado. */
+export async function descargarFoto(bucket: BucketFotos, path: string, nombreArchivo: string) {
+  const url = await obtenerUrlFirmada(bucket, path)
+  const blob = await (await fetch(url)).blob()
+  const objectUrl = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = objectUrl
+  a.download = nombreArchivo
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(objectUrl)
+}

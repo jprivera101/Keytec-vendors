@@ -38,3 +38,31 @@ export function semanasCalendarioDeMes(anio: number, mes: number): Date[] {
   }
   return lunes
 }
+
+/** Mes actual en formato "AAAA-MM", para el valor por defecto de un <input type="month">. */
+export function mesISOActual(): string {
+  const hoy = new Date()
+  return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`
+}
+
+/** Mes inmediatamente anterior al actual, en formato "AAAA-MM". */
+export function mesISOAnterior(): string {
+  const hoy = new Date()
+  const anterior = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1)
+  return `${anterior.getFullYear()}-${String(anterior.getMonth() + 1).padStart(2, '0')}`
+}
+
+/** Límites [primer día del mes, primer día del mes siguiente) para el mes "AAAA-MM" dado. */
+export function rangoDesdeMesISO(valor: string): {
+  desde: string
+  hasta: string
+  desdeFecha: Date
+  hastaFecha: Date
+} {
+  const [anioStr, mesStr] = valor.split('-')
+  const anio = Number(anioStr)
+  const mes = Number(mesStr) - 1
+  const desdeFecha = new Date(anio, mes, 1)
+  const hastaFecha = new Date(anio, mes + 1, 1)
+  return { desde: desdeFecha.toISOString(), hasta: hastaFecha.toISOString(), desdeFecha, hastaFecha }
+}

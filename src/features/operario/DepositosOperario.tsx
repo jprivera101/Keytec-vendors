@@ -1,15 +1,26 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../../lib/useAuth'
-import { obtenerVendedoresAsignados, obtenerDepositosDeOperario } from '../../lib/operarios'
+import { obtenerVendedoresAsignados } from '../../lib/operarios'
+import { obtenerDepositosDeVendedoresEnRango } from '../../lib/api'
+import { mesISOActual, mesISOAnterior, rangoDesdeMesISO } from '../../lib/fechas'
 import { Spinner } from '../../components/Spinner'
 import { PageHeader } from '../../components/PageHeader'
+import { Segmentado } from '../../components/Segmentado'
 import { IconDepositos } from '../../components/icons'
 import { DepositoCard } from '../shared/DepositoCard'
+
+type ModoMes = 'actual' | 'anteriores'
 
 export function DepositosOperario() {
   const { profile } = useAuth()
   const [vendedorFiltro, setVendedorFiltro] = useState<string | 'ALL'>('ALL')
+  const [modoMes, setModoMes] = useState<ModoMes>('actual')
+  const [mesElegido, setMesElegido] = useState(mesISOAnterior())
+
+  const mesISO = modoMes === 'actual' ? mesISOActual() : mesElegido
+  const { desde, hasta, desdeFecha } = rangoDesdeMesISO(mesISO)
+  const etiquetaMes = desdeFecha.toLocaleDateString('es-GT', { month: 'long', year: 'numeric' })
 
   const vendedoresQuery = useQuery({
     queryKey: ['vendedores-asignados', profile!.id],
@@ -17,11 +28,12 @@ export function DepositosOperario() {
   })
   const vendedores = vendedoresQuery.data ?? []
   const nombrePorId = new Map(vendedores.map((v) => [v.id, v.full_name]))
+  const vendedorIds = vendedores.map((v) => v.id)
 
   const depositosQuery = useQuery({
-    queryKey: ['depositos-operario', vendedores.map((v) => v.id)],
-    queryFn: () => obtenerDepositosDeOperario(vendedores.map((v) => v.id)),
-    enabled: vendedores.length > 0,
+    queryKey: ['depositos-operario', vendedorIds, desde, hasta],
+    queryFn: () => obtenerDepositosDeVendedoresEnRango(vendedorIds, desde, hasta),
+    enabled: vendedorIds.length > 0,
   })
 
   const depositos = (depositosQuery.data ?? []).filter(
@@ -37,20 +49,44 @@ export function DepositosOperario() {
         subtitle="Depósitos de efectivo de tus vendedores asignados."
       />
 
-      <div className="card p-4">
-        <label className="mb-1.5 block text-xs font-medium text-slate-500">Vendedor</label>
-        <select
-          value={vendedorFiltro}
-          onChange={(e) => setVendedorFiltro(e.target.value)}
-          className="input-field"
-        >
-          <option value="ALL">Todos mis vendedores</option>
-          {vendedores.map((vendedor) => (
-            <option key={vendedor.id} value={vendedor.id}>
-              {vendedor.full_name}
-            </option>
-          ))}
-        </select>
+      <div className="card space-y-4 p-4">
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-slate-500">Vendedor</label>
+          <select
+            value={vendedorFiltro}
+            onChange={(e) => setVendedorFiltro(e.target.value)}
+            className="input-field"
+          >
+            <option value="ALL">Todos mis vendedores</option>
+            {vendedores.map((vendedor) => (
+              <option key={vendedor.id} value={vendedor.id}>
+                {vendedor.full_name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="border-t border-slate-100 pt-4">
+          <label className="mb-1.5 block text-xs font-medium text-slate-500">Mes</label>
+          <Segmentado
+            valor={modoMes}
+            opciones={[
+              { valor: 'actual', etiqueta: 'Mes actual' },
+              { valor: 'anteriores', etiqueta: 'Meses anteriores' },
+            ]}
+            onChange={setModoMes}
+          />
+          {modoMes === 'anteriores' && (
+            <input
+              type="month"
+              value={mesElegido}
+              max={mesISOAnterior()}
+              onChange={(e) => setMesElegido(e.target.value)}
+              className="input-field mt-2"
+            />
+          )}
+          <p className="mt-1 text-xs capitalize text-slate-400">{etiquetaMes}</p>
+        </div>
       </div>
 
       {vendedoresQuery.isLoading || depositosQuery.isLoading ? (
@@ -66,6 +102,7 @@ export function DepositosOperario() {
               key={deposito.id}
               deposito={deposito}
               vendedorNombre={nombrePorId.get(deposito.salesman_id)}
+              puedeDescargar
             />
           ))}
         </div>
