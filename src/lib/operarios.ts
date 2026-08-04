@@ -156,22 +156,31 @@ interface FilaEnvioOperario {
  *
  * Incluye tanto "sales" (ligadas a una visita/tienda) como "shipment_sales" (ventas por
  * envío, sin tienda): antes solo se traían las primeras, así que una venta por envío nunca
- * le aparecía al operario para procesarla en el CRM. */
-export async function obtenerVentasOperario(): Promise<VentaOperario[]> {
-  const [ventasRes, enviosRes] = await Promise.all([
-    supabase
-      .from('sales')
-      .select(
-        'id, amount, photo_path, created_at, processed, visits(store_id, store_name, stores(client_name), weeks(id, status, salesman_id, profiles(full_name, country)))',
-      )
-      .order('created_at', { ascending: false }),
-    supabase
-      .from('shipment_sales')
-      .select(
-        'id, amount, photo_path, created_at, processed, client_name, weeks(id, status, salesman_id, profiles(full_name, country))',
-      )
-      .order('created_at', { ascending: false }),
-  ])
+ * le aparecía al operario para procesarla en el CRM.
+ *
+ * `soloPendientes` evita traer el historial completo de ventas ya procesadas cuando el
+ * operario mira "Anteriores"/"Todas" -- ahí solo le interesa lo que todavía le falta
+ * procesar, no volver a bajar meses de ventas ya cerradas cada vez que abre el panel. */
+export async function obtenerVentasOperario(soloPendientes = false): Promise<VentaOperario[]> {
+  let ventasQuery = supabase
+    .from('sales')
+    .select(
+      'id, amount, photo_path, created_at, processed, visits(store_id, store_name, stores(client_name), weeks(id, status, salesman_id, profiles(full_name, country)))',
+    )
+    .order('created_at', { ascending: false })
+  let enviosQuery = supabase
+    .from('shipment_sales')
+    .select(
+      'id, amount, photo_path, created_at, processed, client_name, weeks(id, status, salesman_id, profiles(full_name, country))',
+    )
+    .order('created_at', { ascending: false })
+
+  if (soloPendientes) {
+    ventasQuery = ventasQuery.eq('processed', false)
+    enviosQuery = enviosQuery.eq('processed', false)
+  }
+
+  const [ventasRes, enviosRes] = await Promise.all([ventasQuery, enviosQuery])
   if (ventasRes.error) throw ventasRes.error
   if (enviosRes.error) throw enviosRes.error
 

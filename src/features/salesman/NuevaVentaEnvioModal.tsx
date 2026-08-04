@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Modal } from '../../components/Modal'
 import { CamaraCaptura } from '../../components/CamaraCaptura'
-import { EditorFoto } from '../../components/EditorFoto'
 import { comprimirImagen } from '../../lib/imageCompress'
 import { subirFoto } from '../../lib/storage'
 import { crearVentaEnvio } from '../../lib/api'
@@ -17,14 +16,13 @@ interface Props {
   onCreada: (venta: VentaEnvio) => void
 }
 
-type Paso = 'foto' | 'editar' | 'datos'
+type Paso = 'foto' | 'datos'
 
 /** Venta que no esta ligada a ninguna tienda ni ubicacion (p.ej. se vendio ya cerrada la
  * semana y se registra hasta iniciar la siguiente). Misma logica que una venta normal
  * (foto + monto) mas un campo de a quien se le vendio. */
 export function NuevaVentaEnvioModal({ abierto, weekId, userId, country, onCerrar, onCreada }: Props) {
   const [paso, setPaso] = useState<Paso>('foto')
-  const [imagenOriginal, setImagenOriginal] = useState<string | null>(null)
   const [fotoFinal, setFotoFinal] = useState<Blob | null>(null)
   const [previewFinal, setPreviewFinal] = useState<string | null>(null)
   const [cliente, setCliente] = useState('')
@@ -40,7 +38,6 @@ export function NuevaVentaEnvioModal({ abierto, weekId, userId, country, onCerra
 
   function reiniciar() {
     setPaso('foto')
-    setImagenOriginal(null)
     setFotoFinal(null)
     setPreviewFinal(null)
     setCliente('')
@@ -48,12 +45,7 @@ export function NuevaVentaEnvioModal({ abierto, weekId, userId, country, onCerra
     setError(null)
   }
 
-  function manejarArchivo(archivo: Blob) {
-    setImagenOriginal(URL.createObjectURL(archivo))
-    setPaso('editar')
-  }
-
-  function manejarCropConfirmado(blob: Blob) {
+  function manejarArchivo(blob: Blob) {
     setFotoFinal(blob)
     setPreviewFinal(URL.createObjectURL(blob))
     setPaso('datos')
@@ -103,14 +95,6 @@ export function NuevaVentaEnvioModal({ abierto, weekId, userId, country, onCerra
           </p>
           <CamaraCaptura etiqueta="Foto del monto de venta" onCapturada={manejarArchivo} />
         </div>
-      )}
-
-      {paso === 'editar' && imagenOriginal && (
-        <EditorFoto
-          imageSrc={imagenOriginal}
-          onConfirmar={manejarCropConfirmado}
-          onCancelar={() => setPaso('foto')}
-        />
       )}
 
       {paso === 'datos' && (

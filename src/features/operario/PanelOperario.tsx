@@ -17,6 +17,8 @@ import { FotoPrivada } from '../../components/FotoPrivada'
 import { VisorFotoZoom } from '../../components/VisorFotoZoom'
 import { PageHeader } from '../../components/PageHeader'
 import { IconProcesar } from '../../components/icons'
+import { Segmentado } from '../../components/Segmentado'
+import type { CountryCode } from '../../lib/types'
 
 type FiltroEstado = 'pendiente' | 'procesada' | 'todas'
 type FiltroSemana = 'activa' | 'anteriores' | 'todas'
@@ -41,6 +43,13 @@ export function PanelOperario() {
   useEffect(() => {
     setCodigoInput('')
   }, [ventaSeleccionada?.id])
+
+  // Fuera de la semana activa solo se trae (y se puede ver) lo pendiente -- ver
+  // obtenerVentasOperario. El selector de Estado no aplica ahí, así que se fuerza a
+  // "pendiente" para que no quede una combinación imposible de filtros.
+  useEffect(() => {
+    if (semanaFiltro !== 'activa') setEstadoFiltro('pendiente')
+  }, [semanaFiltro])
 
   async function confirmarAccion() {
     if (!ventaSeleccionada || accionAConfirmar === null) return
@@ -67,9 +76,10 @@ export function PanelOperario() {
     queryKey: ['vendedores-asignados', profile!.id],
     queryFn: () => obtenerVendedoresAsignados(profile!.id),
   })
+  const soloPendientes = semanaFiltro !== 'activa'
   const ventasQuery = useQuery({
-    queryKey: ['ventas-operario'],
-    queryFn: obtenerVentasOperario,
+    queryKey: ['ventas-operario', soloPendientes],
+    queryFn: () => obtenerVentasOperario(soloPendientes),
   })
   const codigoQuery = useQuery({
     queryKey: ['codigo-tienda', ventaSeleccionada?.storeId],
@@ -100,14 +110,23 @@ export function PanelOperario() {
     }
   }
 
-  const ventas = (ventasQuery.data ?? []).filter((venta) => {
+  const ventasDelVendedor = (ventasQuery.data ?? []).filter((venta) => {
     if (vendedorFiltro !== 'ALL' && venta.salesmanId !== vendedorFiltro) return false
     if (semanaFiltro === 'activa' && venta.weekStatus !== 'active') return false
     if (semanaFiltro === 'anteriores' && venta.weekStatus !== 'completed') return false
+    return true
+  })
+
+  const ventas = ventasDelVendedor.filter((venta) => {
     if (estadoFiltro === 'pendiente' && venta.processed) return false
     if (estadoFiltro === 'procesada' && !venta.processed) return false
     return true
   })
+
+  // Por país porque un mismo operario puede tener vendedores asignados en más de un país
+  // (monedas distintas) -- sumar todo junto en un solo número no significaría nada.
+  const totalVendido = sumarPorPais(ventasDelVendedor)
+  const totalPendiente = sumarPorPais(ventasDelVendedor.filter((v) => !v.processed))
 
   return (
     <div className="space-y-4">
@@ -151,18 +170,49 @@ export function PanelOperario() {
 
           <div className="border-t border-slate-100 pt-4 sm:col-span-2 sm:border-t sm:pt-4 lg:col-span-1 lg:border-t-0 lg:pt-0">
             <label className="mb-1.5 block text-xs font-medium text-slate-500">Estado</label>
-            <Segmentado
-              valor={estadoFiltro}
-              opciones={[
-                { valor: 'pendiente', etiqueta: 'Pendientes' },
-                { valor: 'procesada', etiqueta: 'Procesadas' },
-                { valor: 'todas', etiqueta: 'Todas' },
-              ]}
-              onChange={(v) => setEstadoFiltro(v as FiltroEstado)}
-            />
+            {soloPendientes ? (
+              <p className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-xs text-slate-400">
+                Solo pendientes fuera de la semana activa
+              </p>
+            ) : (
+              <Segmentado
+                valor={estadoFiltro}
+                opciones={[
+                  { valor: 'pendiente', etiqueta: 'Pendientes' },
+                  { valor: 'procesada', etiqueta: 'Procesadas' },
+                  { valor: 'todas', etiqueta: 'Todas' },
+                ]}
+                onChange={(v) => setEstadoFiltro(v as FiltroEstado)}
+              />
+            )}
           </div>
         </div>
       </div>
+
+      {!ventasQuery.isLoading && (totalVendido.size > 0 || totalPendiente.size > 0) && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {!soloPendientes && (
+            <div className="card p-3">
+              <p className="text-xs text-slate-400">Total vendido</p>
+              <p className="mt-1 space-x-2 text-lg font-bold text-slate-900">
+                {totalVendido.size === 0 && '—'}
+                {Array.from(totalVendido.entries()).map(([pais, total]) => (
+                  <span key={pais ?? 'sin-pais'}>{formatMonto(total, pais)}</span>
+                ))}
+              </p>
+            </div>
+          )}
+          <div className="card p-3">
+            <p className="text-xs text-slate-400">Total pendiente de procesar</p>
+            <p className="mt-1 space-x-2 text-lg font-bold text-amber-700">
+              {totalPendiente.size === 0 && '—'}
+              {Array.from(totalPendiente.entries()).map(([pais, total]) => (
+                <span key={pais ?? 'sin-pais'}>{formatMonto(total, pais)}</span>
+              ))}
+            </p>
+          </div>
+        </div>
+      )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
@@ -478,29 +528,13 @@ export function PanelOperario() {
   )
 }
 
-function Segmentado<T extends string>({
-  valor,
-  opciones,
-  onChange,
-}: {
-  valor: T
-  opciones: { valor: T; etiqueta: string }[]
-  onChange: (valor: T) => void
-}) {
-  return (
-    <div className="flex flex-1 gap-1 rounded-lg bg-slate-100 p-1">
-      {opciones.map((opcion) => (
-        <button
-          key={opcion.valor}
-          type="button"
-          onClick={() => onChange(opcion.valor)}
-          className={`flex-1 rounded-md py-1.5 text-xs font-semibold transition-colors ${
-            valor === opcion.valor ? 'bg-white text-ink-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          {opcion.etiqueta}
-        </button>
-      ))}
-    </div>
-  )
+/** Suma por país en vez de un solo total: un operario puede tener vendedores asignados en
+ * más de un país (monedas distintas), y sumar todo junto no significaría nada. */
+function sumarPorPais(ventas: VentaOperario[]): Map<CountryCode | null, number> {
+  const mapa = new Map<CountryCode | null, number>()
+  for (const venta of ventas) {
+    mapa.set(venta.country, (mapa.get(venta.country) ?? 0) + venta.amount)
+  }
+  return mapa
 }
+

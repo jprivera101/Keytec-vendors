@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Modal } from '../../components/Modal'
 import { CamaraCaptura } from '../../components/CamaraCaptura'
-import { EditorFoto } from '../../components/EditorFoto'
 import { comprimirImagen } from '../../lib/imageCompress'
 import { subirFoto } from '../../lib/storage'
 import { crearVenta } from '../../lib/api'
@@ -17,12 +16,11 @@ interface Props {
   onCreada: (venta: Sale) => void
 }
 
-type Paso = 'foto' | 'editar' | 'monto'
+type Paso = 'foto' | 'monto'
 
 export function NuevaVentaModal({ abierto, visitId, userId, country, onCerrar, onCreada }: Props) {
   const simbolo = country ? SIMBOLO_MONEDA[country] : 'Q'
   const [paso, setPaso] = useState<Paso>('foto')
-  const [imagenOriginal, setImagenOriginal] = useState<string | null>(null)
   const [fotoFinal, setFotoFinal] = useState<Blob | null>(null)
   const [previewFinal, setPreviewFinal] = useState<string | null>(null)
   const [monto, setMonto] = useState('')
@@ -36,19 +34,13 @@ export function NuevaVentaModal({ abierto, visitId, userId, country, onCerrar, o
 
   function reiniciar() {
     setPaso('foto')
-    setImagenOriginal(null)
     setFotoFinal(null)
     setPreviewFinal(null)
     setMonto('')
     setError(null)
   }
 
-  function manejarArchivo(archivo: Blob) {
-    setImagenOriginal(URL.createObjectURL(archivo))
-    setPaso('editar')
-  }
-
-  function manejarCropConfirmado(blob: Blob) {
+  function manejarArchivo(blob: Blob) {
     setFotoFinal(blob)
     setPreviewFinal(URL.createObjectURL(blob))
     setPaso('monto')
@@ -86,14 +78,6 @@ export function NuevaVentaModal({ abierto, visitId, userId, country, onCerrar, o
   return (
     <Modal titulo="Registrar venta" abierto={abierto} onCerrar={onCerrar}>
       {paso === 'foto' && <CamaraCaptura etiqueta="Foto del monto de venta" onCapturada={manejarArchivo} />}
-
-      {paso === 'editar' && imagenOriginal && (
-        <EditorFoto
-          imageSrc={imagenOriginal}
-          onConfirmar={manejarCropConfirmado}
-          onCancelar={() => setPaso('foto')}
-        />
-      )}
 
       {paso === 'monto' && (
         <div className="space-y-4">
