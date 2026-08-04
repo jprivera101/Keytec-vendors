@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { FotoPrivada } from '../../components/FotoPrivada'
-import { Modal } from '../../components/Modal'
+import { VisorFotoZoom } from '../../components/VisorFotoZoom'
 import { IconChevron } from '../../components/icons'
 import { formatMonto } from '../../lib/currency'
 import { actualizarMontoGasolina } from '../../lib/api'
@@ -147,20 +147,13 @@ export function GasolinaCard({ registro, country, puedeEditar = false }: Props) 
         </div>
       )}
 
-      <Modal
-        titulo={fotoAmpliada ? ETIQUETAS_FOTO[fotoAmpliada] : ''}
+      <VisorFotoZoom
+        bucket="gasoline-photos"
+        path={fotoAmpliada ? registro[fotoAmpliada] : null}
+        alt={fotoAmpliada ? ETIQUETAS_FOTO[fotoAmpliada] : ''}
         abierto={!!fotoAmpliada}
         onCerrar={() => setFotoAmpliada(null)}
-      >
-        {fotoAmpliada && (
-          <FotoPrivada
-            bucket="gasoline-photos"
-            path={registro[fotoAmpliada]}
-            alt={ETIQUETAS_FOTO[fotoAmpliada]}
-            className="max-h-[70vh] w-full rounded-lg object-contain"
-          />
-        )}
-      </Modal>
+      />
     </div>
   )
 }

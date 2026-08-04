@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { FotoPrivada } from '../../components/FotoPrivada'
-import { Modal } from '../../components/Modal'
+import { VisorFotoZoom } from '../../components/VisorFotoZoom'
 import { IconChevron } from '../../components/icons'
 import { formatMonto } from '../../lib/currency'
 import type { CountryCode, VisitWithSales } from '../../lib/types'
@@ -140,34 +140,21 @@ export function VisitaCard({ visita, onAgregarVenta, puedeAgregarVenta, country 
         </button>
       )}
 
-      <Modal titulo="Foto de lo que se vendió" abierto={!!fotoAmpliada} onCerrar={() => setFotoAmpliada(null)}>
-        {fotoAmpliada && (
-          <>
-            <FotoPrivada
-              bucket="sale-photos"
-              path={fotoAmpliada}
-              alt="Foto de lo que se vendió"
-              className="max-h-[70vh] w-full rounded-lg object-contain"
-            />
-            <p className="mt-2 text-xs text-slate-500">
-              Foto tomada por el vendedor al momento de registrar esta venta.
-            </p>
-          </>
-        )}
-      </Modal>
+      <VisorFotoZoom
+        bucket="sale-photos"
+        path={fotoAmpliada}
+        alt="Foto de lo que se vendió"
+        abierto={!!fotoAmpliada}
+        onCerrar={() => setFotoAmpliada(null)}
+      />
 
-      <Modal
-        titulo="Foto de la visita"
+      <VisorFotoZoom
+        bucket="visit-photos"
+        path={visita.photo_path}
+        alt="Foto tomada en la visita a la tienda"
         abierto={fotoVisitaAmpliada}
         onCerrar={() => setFotoVisitaAmpliada(false)}
-      >
-        <FotoPrivada
-          bucket="visit-photos"
-          path={visita.photo_path}
-          alt="Foto tomada en la visita a la tienda"
-          className="max-h-[70vh] w-full rounded-lg object-contain"
-        />
-      </Modal>
+      />
     </div>
   )
 }

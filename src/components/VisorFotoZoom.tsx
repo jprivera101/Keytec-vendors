@@ -29,6 +29,10 @@ export function VisorFotoZoom({ bucket, path, alt, abierto, onCerrar }: Props) {
   const [escala, setEscala] = useState(1)
   const [pos, setPos] = useState({ x: 0, y: 0 })
   const [arrastrando, setArrastrando] = useState(false)
+  // Solo cambia como se ve en este visor (transform de CSS) -- no toca el archivo guardado.
+  // Muchas fotos viejas quedaron torcidas al tomarlas; esto es para poder revisarlas bien
+  // ahora, no para corregirlas de forma permanente.
+  const [rotacion, setRotacion] = useState(0)
 
   const punterosActivos = useRef(new Map<number, { x: number; y: number }>())
   const ultimoPunto = useRef({ x: 0, y: 0 })
@@ -39,6 +43,7 @@ export function VisorFotoZoom({ bucket, path, alt, abierto, onCerrar }: Props) {
     if (!abierto || !path) return
     setEscala(1)
     setPos({ x: 0, y: 0 })
+    setRotacion(0)
     setUrl(null)
     let activo = true
     obtenerUrlFirmada(bucket, path).then((u) => {
@@ -136,14 +141,32 @@ export function VisorFotoZoom({ bucket, path, alt, abierto, onCerrar }: Props) {
             </button>
           )}
         </div>
-        <button
-          type="button"
-          onClick={onCerrar}
-          aria-label="Cerrar"
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
-        >
-          ✕
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setRotacion((r) => (r - 90 + 360) % 360)}
+            aria-label="Rotar a la izquierda"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-lg text-white hover:bg-white/20"
+          >
+            ⟲
+          </button>
+          <button
+            type="button"
+            onClick={() => setRotacion((r) => (r + 90) % 360)}
+            aria-label="Rotar a la derecha"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-lg text-white hover:bg-white/20"
+          >
+            ⟳
+          </button>
+          <button
+            type="button"
+            onClick={onCerrar}
+            aria-label="Cerrar"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
       <div
@@ -165,9 +188,11 @@ export function VisorFotoZoom({ bucket, path, alt, abierto, onCerrar }: Props) {
             src={url}
             alt={alt}
             draggable={false}
-            className="pointer-events-none absolute left-1/2 top-1/2 max-h-[80vh] max-w-[90vw]"
+            className={`pointer-events-none absolute left-1/2 top-1/2 ${
+              rotacion % 180 !== 0 ? 'max-h-[90vw] max-w-[80vh]' : 'max-h-[80vh] max-w-[90vw]'
+            }`}
             style={{
-              transform: `translate(-50%, -50%) translate(${pos.x}px, ${pos.y}px) scale(${escala})`,
+              transform: `translate(-50%, -50%) translate(${pos.x}px, ${pos.y}px) scale(${escala}) rotate(${rotacion}deg)`,
               transition: arrastrando ? 'none' : 'transform 0.15s ease-out',
             }}
           />
@@ -175,7 +200,7 @@ export function VisorFotoZoom({ bucket, path, alt, abierto, onCerrar }: Props) {
       </div>
 
       <p className="p-3 text-center text-xs text-white/40">
-        Rueda del mouse o pellizco para acercar · arrastra para mover · doble clic para alternar
+        Rueda del mouse o pellizco para acercar · arrastra para mover · doble clic para alternar · ⟲⟳ para rotar
       </p>
     </div>
   )

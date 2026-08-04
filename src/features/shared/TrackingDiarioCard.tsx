@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { FotoPrivada } from '../../components/FotoPrivada'
+import { VisorFotoZoom } from '../../components/VisorFotoZoom'
 import { Modal } from '../../components/Modal'
 import { IconChevron } from '../../components/icons'
 import { formatNumero } from '../../lib/numeros'
@@ -196,20 +197,13 @@ export function TrackingDiarioCard({ tracking, puedeReabrir = false, puedeEditar
         </div>
       )}
 
-      <Modal
-        titulo={fotoAmpliada === 'inicio' ? 'Foto al empezar el día' : 'Foto al terminar el día'}
+      <VisorFotoZoom
+        bucket="daily-tracking-photos"
+        path={fotoAmpliada ? (fotoAmpliada === 'inicio' ? tracking.start_photo_path : tracking.end_photo_path) : null}
+        alt="Foto"
         abierto={!!fotoAmpliada}
         onCerrar={() => setFotoAmpliada(null)}
-      >
-        {fotoAmpliada && (
-          <FotoPrivada
-            bucket="daily-tracking-photos"
-            path={fotoAmpliada === 'inicio' ? tracking.start_photo_path : tracking.end_photo_path!}
-            alt="Foto"
-            className="max-h-[70vh] w-full rounded-lg object-contain"
-          />
-        )}
-      </Modal>
+      />
 
       <Modal titulo="Editar kilometraje del día" abierto={editandoKm} onCerrar={() => setEditandoKm(false)}>
         <div className="space-y-3">

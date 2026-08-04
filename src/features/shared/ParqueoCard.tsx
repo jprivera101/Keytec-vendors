@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { FotoPrivada } from '../../components/FotoPrivada'
-import { Modal } from '../../components/Modal'
+import { VisorFotoZoom } from '../../components/VisorFotoZoom'
 import { IconChevron } from '../../components/icons'
 import type { ParkingSpot } from '../../lib/types'
 
@@ -81,20 +81,13 @@ export function ParqueoCard({ parqueo }: Props) {
         </div>
       )}
 
-      <Modal
-        titulo={fotoAmpliada === 'car' ? 'Foto del carro' : 'Foto del recibo'}
+      <VisorFotoZoom
+        bucket="parking-photos"
+        path={fotoAmpliada ? (fotoAmpliada === 'car' ? parqueo.car_photo_path : parqueo.receipt_photo_path) : null}
+        alt="Foto"
         abierto={!!fotoAmpliada}
         onCerrar={() => setFotoAmpliada(null)}
-      >
-        {fotoAmpliada && (
-          <FotoPrivada
-            bucket="parking-photos"
-            path={fotoAmpliada === 'car' ? parqueo.car_photo_path : parqueo.receipt_photo_path!}
-            alt="Foto"
-            className="max-h-[70vh] w-full rounded-lg object-contain"
-          />
-        )}
-      </Modal>
+      />
     </div>
   )
 }

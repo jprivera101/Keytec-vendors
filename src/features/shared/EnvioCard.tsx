@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { FotoPrivada } from '../../components/FotoPrivada'
-import { Modal } from '../../components/Modal'
+import { VisorFotoZoom } from '../../components/VisorFotoZoom'
 import { formatMonto } from '../../lib/currency'
 import type { CountryCode, VentaEnvio } from '../../lib/types'
 
@@ -42,16 +42,13 @@ export function EnvioCard({ venta, country }: Props) {
       </div>
       <p className="shrink-0 text-sm font-bold text-slate-900">{formatMonto(venta.amount, country)}</p>
 
-      <Modal titulo="Foto de la venta" abierto={fotoAmpliada} onCerrar={() => setFotoAmpliada(false)}>
-        {venta.photo_path && (
-          <FotoPrivada
-            bucket="sale-photos"
-            path={venta.photo_path}
-            alt="Foto de la venta"
-            className="max-h-[70vh] w-full rounded-lg object-contain"
-          />
-        )}
-      </Modal>
+      <VisorFotoZoom
+        bucket="sale-photos"
+        path={venta.photo_path}
+        alt="Foto de la venta"
+        abierto={fotoAmpliada}
+        onCerrar={() => setFotoAmpliada(false)}
+      />
     </div>
   )
 }

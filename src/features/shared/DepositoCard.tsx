@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { FotoPrivada } from '../../components/FotoPrivada'
-import { Modal } from '../../components/Modal'
+import { VisorFotoZoom } from '../../components/VisorFotoZoom'
 import type { Deposito } from '../../lib/types'
 
 interface Props {
@@ -38,14 +38,13 @@ export function DepositoCard({ deposito, vendedorNombre }: Props) {
         </p>
       </div>
 
-      <Modal titulo="Foto del depósito" abierto={fotoAmpliada} onCerrar={() => setFotoAmpliada(false)}>
-        <FotoPrivada
-          bucket="deposit-photos"
-          path={deposito.photo_path}
-          alt="Foto del depósito"
-          className="max-h-[70vh] w-full rounded-lg object-contain"
-        />
-      </Modal>
+      <VisorFotoZoom
+        bucket="deposit-photos"
+        path={deposito.photo_path}
+        alt="Foto del depósito"
+        abierto={fotoAmpliada}
+        onCerrar={() => setFotoAmpliada(false)}
+      />
     </div>
   )
 }
