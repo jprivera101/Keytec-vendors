@@ -129,7 +129,7 @@ export function MapaMultiVendedor({ vendedores, country }: Props) {
                         <div className="w-40">
                           <FotoPrivada
                             bucket="visit-photos"
-                            path={visita.photo_path}
+                            path={visita.photo_path ?? visita.store_photo_path ?? null}
                             alt="Foto de la tienda"
                             className="mb-2 h-24 w-full rounded object-cover"
                           />

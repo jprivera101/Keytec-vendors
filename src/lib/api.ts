@@ -168,14 +168,22 @@ export async function cancelarVenta(id: string, motivo: string, adminId: string)
   if (error) throw error
 }
 
+/** Aplana el embed "stores(photo_path)" a store_photo_path -- foto de respaldo cuando la
+ * visita puntual no tiene la suya propia (tienda ya existente + foto de visita desactivada). */
+function aplanarFotoTienda(
+  filas: (VisitWithSales & { stores: { photo_path: string | null } | null })[],
+): VisitWithSales[] {
+  return filas.map(({ stores, ...resto }) => ({ ...resto, store_photo_path: stores?.photo_path ?? null }))
+}
+
 export async function obtenerVisitasConVentas(weekId: string): Promise<VisitWithSales[]> {
   const { data, error } = await supabase
     .from('visits')
-    .select('*, sales(*)')
+    .select('*, sales(*), stores(photo_path)')
     .eq('week_id', weekId)
     .order('captured_at', { ascending: true })
   if (error) throw error
-  return data as VisitWithSales[]
+  return aplanarFotoTienda(data as unknown as (VisitWithSales & { stores: { photo_path: string | null } | null })[])
 }
 
 export interface VisitaConVendedor extends VisitWithSales {
@@ -202,14 +210,17 @@ export async function obtenerVisitasPorPaisYRango(
 
   const { data: visitas, error } = await supabase
     .from('visits')
-    .select('*, sales(*)')
+    .select('*, sales(*), stores(photo_path)')
     .in('week_id', Array.from(salesmanPorSemana.keys()))
     .gte('captured_at', desde.toISOString())
     .lt('captured_at', hasta.toISOString())
     .order('captured_at', { ascending: true })
   if (error) throw error
 
-  return (visitas as VisitWithSales[]).map((v) => ({ ...v, salesman_id: salesmanPorSemana.get(v.week_id)! }))
+  const aplanadas = aplanarFotoTienda(
+    visitas as unknown as (VisitWithSales & { stores: { photo_path: string | null } | null })[],
+  )
+  return aplanadas.map((v) => ({ ...v, salesman_id: salesmanPorSemana.get(v.week_id)! }))
 }
 
 // Gasolina -------------------------------------------------------------

@@ -85,6 +85,10 @@ export interface Visit {
   /** Null cuando la tienda ya existía y el vendedor tiene la foto de visita desactivada. Una
    * tienda nueva siempre trae foto (queda como la foto permanente de la tienda). */
   photo_path: string | null
+  /** Foto permanente de la tienda (stores.photo_path), para usar de respaldo en pantalla
+   * cuando esta visita puntual no tiene su propia foto. Solo viene poblado en las consultas
+   * que lo piden explícitamente (no en crearVisita ni en todas las lecturas). */
+  store_photo_path?: string | null
   latitude: number
   longitude: number
   notes: string | null

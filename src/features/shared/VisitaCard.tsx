@@ -36,6 +36,9 @@ export function VisitaCard({
   const [ventaCancelando, setVentaCancelando] = useState<Sale | null>(null)
   const ventasActivas = visita.sales.filter((v) => !v.cancelled)
   const totalVenta = ventasActivas.reduce((suma, v) => suma + Number(v.amount), 0)
+  // Si esta visita puntual no tiene foto propia (tienda ya existente + foto de visita
+  // desactivada), se muestra la foto permanente de la tienda en su lugar.
+  const fotoVisita = visita.photo_path ?? visita.store_photo_path ?? null
   const fechaHoraVisita = new Date(visita.captured_at).toLocaleString('es-GT', {
     day: '2-digit',
     month: '2-digit',
@@ -53,7 +56,7 @@ export function VisitaCard({
       >
         <FotoPrivada
           bucket="visit-photos"
-          path={visita.photo_path}
+          path={fotoVisita}
           alt="Foto tomada en la visita a la tienda"
           className="h-12 w-12 shrink-0 rounded-lg object-cover"
         />
@@ -87,7 +90,7 @@ export function VisitaCard({
           <button type="button" onClick={() => setFotoVisitaAmpliada(true)} className="mb-3 block w-full">
             <FotoPrivada
               bucket="visit-photos"
-              path={visita.photo_path}
+              path={fotoVisita}
               alt="Foto tomada en la visita a la tienda"
               className="h-40 w-full rounded-lg object-cover"
             />
@@ -193,7 +196,7 @@ export function VisitaCard({
 
       <VisorFotoZoom
         bucket="visit-photos"
-        path={visita.photo_path}
+        path={fotoVisita}
         alt="Foto tomada en la visita a la tienda"
         abierto={fotoVisitaAmpliada}
         onCerrar={() => setFotoVisitaAmpliada(false)}
