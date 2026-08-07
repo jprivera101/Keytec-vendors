@@ -8,13 +8,15 @@ import {
 } from '../../lib/tiendas'
 import { obtenerRegionesPorPais } from '../../lib/regiones'
 import { formatMonto } from '../../lib/currency'
+import { fechaLocalISO } from '../../lib/fechas'
 import { Spinner } from '../../components/Spinner'
 import { PageHeader } from '../../components/PageHeader'
+import { SeccionColapsable } from '../../components/SeccionColapsable'
 import { IconTiendas } from '../../components/icons'
 import { Flag } from '../../components/flags'
 import { VisitaCard } from '../shared/VisitaCard'
 import type { AdminOutletContext } from './AdminLayout'
-import type { CountryCode, TiendaConEstadisticas } from '../../lib/types'
+import type { CountryCode, TiendaConEstadisticas, VisitWithSales } from '../../lib/types'
 
 type CampoOrden = 'lugar' | 'visitas' | 'ventas' | 'ultimaVisita'
 type Orden = { campo: CampoOrden; direccion: 'asc' | 'desc' }
@@ -38,7 +40,11 @@ export function TiendasAdmin() {
 
   return (
     <div className="space-y-4">
-      {storeId ? <DetalleTienda storeId={storeId} /> : <ListaTiendas pais={pais} />}
+      {storeId ? (
+        <DetalleTienda storeId={storeId} puedeGestionarVentas />
+      ) : (
+        <ListaTiendas pais={pais} />
+      )}
     </div>
   )
 }
@@ -206,7 +212,16 @@ function EncabezadoOrdenable({
   )
 }
 
-function DetalleTienda({ storeId }: { storeId: string }) {
+/** Nombre del mes+año en que cayó la visita, para agrupar el historial (que puede acumular
+ * años de visitas) en bloques manejables en vez de una sola lista larguísima. */
+function claveMes(fechaIso: string) {
+  return new Date(fechaIso).toLocaleDateString('es-GT', { month: 'long', year: 'numeric' })
+}
+
+function DetalleTienda({ storeId, puedeGestionarVentas }: { storeId: string; puedeGestionarVentas: boolean }) {
+  const [desde, setDesde] = useState('')
+  const [hasta, setHasta] = useState('')
+
   const tiendaQuery = useQuery({
     queryKey: ['tienda', storeId],
     queryFn: () => obtenerTiendaPorId(storeId),
@@ -216,7 +231,21 @@ function DetalleTienda({ storeId }: { storeId: string }) {
     queryFn: () => obtenerVisitasDeTienda(storeId),
   })
 
-  const totalVentas = (visitasQuery.data ?? []).reduce(
+  const visitasFiltradas = (visitasQuery.data ?? []).filter((v) => {
+    const fecha = fechaLocalISO(v.captured_at)
+    if (desde && fecha < desde) return false
+    if (hasta && fecha > hasta) return false
+    return true
+  })
+
+  const gruposPorMes = new Map<string, VisitWithSales[]>()
+  for (const visita of visitasFiltradas) {
+    const clave = claveMes(visita.captured_at)
+    if (!gruposPorMes.has(clave)) gruposPorMes.set(clave, [])
+    gruposPorMes.get(clave)!.push(visita)
+  }
+
+  const totalVentas = visitasFiltradas.reduce(
     (suma, v) => suma + v.sales.filter((venta) => !venta.cancelled).reduce((s, venta) => s + Number(venta.amount), 0),
     0,
   )
@@ -241,7 +270,7 @@ function DetalleTienda({ storeId }: { storeId: string }) {
         </div>
         <div className="card p-3 text-center">
           <p className="text-xs text-slate-400">Visitas</p>
-          <p className="mt-1 text-sm font-bold text-slate-900">{visitasQuery.data?.length ?? 0}</p>
+          <p className="mt-1 text-sm font-bold text-slate-900">{visitasFiltradas.length}</p>
         </div>
         <div className="card p-3 text-center">
           <p className="text-xs text-slate-400">Total vendido</p>
@@ -250,20 +279,59 @@ function DetalleTienda({ storeId }: { storeId: string }) {
       </div>
 
       <div>
-        <h2 className="mb-2 text-sm font-semibold text-slate-500">Historial de visitas</h2>
-        {visitasQuery.isLoading && <Spinner />}
-        <div className="space-y-3">
-          {visitasQuery.data?.map((visita) => (
-            <VisitaCard
-              key={visita.id}
-              visita={visita}
-              puedeAgregarVenta={false}
-              onAgregarVenta={() => {}}
-              country={tiendaQuery.data?.country}
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-slate-500">Historial de visitas</h2>
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={desde}
+              onChange={(e) => setDesde(e.target.value)}
+              className="input-field text-sm"
             />
+            <span className="text-xs text-slate-400">a</span>
+            <input
+              type="date"
+              value={hasta}
+              onChange={(e) => setHasta(e.target.value)}
+              className="input-field text-sm"
+            />
+            {(desde || hasta) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDesde('')
+                  setHasta('')
+                }}
+                className="text-xs font-medium text-brand-700 hover:underline"
+              >
+                Limpiar
+              </button>
+            )}
+          </div>
+        </div>
+
+        {visitasQuery.isLoading && <Spinner />}
+
+        <div className="space-y-3">
+          {Array.from(gruposPorMes.entries()).map(([mes, visitasDelMes], i) => (
+            <SeccionColapsable key={mes} titulo={mes} cantidad={visitasDelMes.length} abiertoPorDefecto={i === 0}>
+              {visitasDelMes.map((visita) => (
+                <VisitaCard
+                  key={visita.id}
+                  visita={visita}
+                  puedeAgregarVenta={false}
+                  onAgregarVenta={() => {}}
+                  country={tiendaQuery.data?.country}
+                  puedeGestionarVentas={puedeGestionarVentas}
+                />
+              ))}
+            </SeccionColapsable>
           ))}
-          {visitasQuery.data?.length === 0 && (
+          {!visitasQuery.isLoading && visitasQuery.data?.length === 0 && (
             <p className="text-sm text-slate-400">Sin visitas registradas todavía.</p>
+          )}
+          {!visitasQuery.isLoading && (visitasQuery.data?.length ?? 0) > 0 && visitasFiltradas.length === 0 && (
+            <p className="text-sm text-slate-400">Ninguna visita en el rango de fechas elegido.</p>
           )}
         </div>
       </div>

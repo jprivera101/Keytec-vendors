@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   obtenerSemanaPorId,
@@ -15,7 +15,7 @@ import { Spinner } from '../../components/Spinner'
 import { FotoPrivada } from '../../components/FotoPrivada'
 import { VisorFotoZoom } from '../../components/VisorFotoZoom'
 import { Modal } from '../../components/Modal'
-import { IconChevron } from '../../components/icons'
+import { SeccionColapsable } from '../../components/SeccionColapsable'
 import { MapaRuta } from './MapaRuta'
 import { VisitaCard } from './VisitaCard'
 import { GasolinaCard } from './GasolinaCard'
@@ -79,6 +79,7 @@ export function DetalleSemana({
   })
 
   const [gasolinaAbierta, setGasolinaAbierta] = useState(false)
+  const [busquedaVisita, setBusquedaVisita] = useState('')
 
   if (semanaQuery.isLoading || visitasQuery.isLoading) return <Spinner texto="Cargando semana..." />
   if (!semanaQuery.data) return <p className="p-4 text-sm text-red-600">No se encontró la semana</p>
@@ -101,6 +102,9 @@ export function DetalleSemana({
   )
   const kmRecorridos =
     semana.end_mileage_km != null ? semana.end_mileage_km - semana.start_mileage_km : null
+  const visitasFiltradas = visitas.filter((v) =>
+    (v.store_name ?? '').toLowerCase().includes(busquedaVisita.trim().toLowerCase()),
+  )
 
   return (
     <div className="space-y-4">
@@ -142,7 +146,16 @@ export function DetalleSemana({
       <MapaRuta visitas={visitas} tiendasRegion={tiendasRegion} country={country} parkingSpots={parqueos} />
 
       <SeccionColapsable titulo="Visitas" cantidad={visitas.length}>
-        {visitas.map((visita) => (
+        {visitas.length > 0 && (
+          <input
+            type="search"
+            value={busquedaVisita}
+            onChange={(e) => setBusquedaVisita(e.target.value)}
+            placeholder="Buscar tienda..."
+            className="input-field text-base"
+          />
+        )}
+        {visitasFiltradas.map((visita) => (
           <VisitaCard
             key={visita.id}
             visita={visita}
@@ -153,6 +166,9 @@ export function DetalleSemana({
           />
         ))}
         {visitas.length === 0 && <p className="text-sm text-slate-400">Sin visitas registradas.</p>}
+        {visitas.length > 0 && visitasFiltradas.length === 0 && (
+          <p className="text-sm text-slate-400">Ninguna tienda coincide con "{busquedaVisita}".</p>
+        )}
       </SeccionColapsable>
 
       {ventasEnvio.length > 0 && (
@@ -203,36 +219,6 @@ export function DetalleSemana({
           ))}
         </div>
       </Modal>
-    </div>
-  )
-}
-
-/** Sección colapsada por defecto: el título muestra la cantidad para dar una idea del
- * tamaño sin tener que desplegarla primero (evita abrumar con, por ejemplo, 40+ visitas). */
-function SeccionColapsable({
-  titulo,
-  cantidad,
-  children,
-}: {
-  titulo: string
-  cantidad: number
-  children: ReactNode
-}) {
-  const [abierto, setAbierto] = useState(false)
-  return (
-    <div className="card overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setAbierto((v) => !v)}
-        className="flex w-full items-center justify-between p-3 text-left"
-      >
-        <h3 className="text-sm font-semibold text-slate-500">
-          {titulo} <span className="text-slate-400">({cantidad})</span>
-        </h3>
-        <IconChevron className={`text-slate-400 transition-transform ${abierto ? 'rotate-180' : ''}`} />
-      </button>
-
-      {abierto && <div className="space-y-3 border-t border-slate-100 p-3">{children}</div>}
     </div>
   )
 }
