@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { EditorFoto } from './EditorFoto'
 
 interface Props {
   etiqueta: string
@@ -22,7 +21,6 @@ export function CamaraCaptura({ etiqueta, onCapturada }: Props) {
   const [camaraLista, setCamaraLista] = useState(false)
   const [soportaEnfoque, setSoportaEnfoque] = useState(false)
   const [enfocando, setEnfocando] = useState(false)
-  const [imagenParaEditar, setImagenParaEditar] = useState<string | null>(null)
 
   useEffect(() => {
     return () => detenerCamara()
@@ -117,37 +115,17 @@ export function CamaraCaptura({ etiqueta, onCapturada }: Props) {
     canvas.toBlob(
       (blob) => {
         if (!blob) return
-        setImagenParaEditar(URL.createObjectURL(blob))
+        setPreviewUrl(URL.createObjectURL(blob))
+        onCapturada(blob)
       },
       'image/jpeg',
       0.92,
     )
   }
 
-  function confirmarEdicion(blob: Blob) {
-    setImagenParaEditar(null)
-    setPreviewUrl(URL.createObjectURL(blob))
-    onCapturada(blob)
-  }
-
   function tomarDeNuevo() {
     setPreviewUrl(null)
     activarCamara()
-  }
-
-  // Se muestra antes que nada: aunque la camara ya se cerro (detenerCamara), la edicion
-  // (recorte + rotacion, para fotos que salieron torcidas) pasa primero.
-  if (imagenParaEditar) {
-    return (
-      <EditorFoto
-        imageSrc={imagenParaEditar}
-        onConfirmar={confirmarEdicion}
-        onCancelar={() => {
-          setImagenParaEditar(null)
-          activarCamara()
-        }}
-      />
-    )
   }
 
   if (previewUrl) {
