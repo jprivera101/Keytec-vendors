@@ -217,7 +217,7 @@ function DetalleTienda({ storeId }: { storeId: string }) {
   })
 
   const totalVentas = (visitasQuery.data ?? []).reduce(
-    (suma, v) => suma + v.sales.reduce((s, venta) => s + Number(venta.amount), 0),
+    (suma, v) => suma + v.sales.filter((venta) => !venta.cancelled).reduce((s, venta) => s + Number(venta.amount), 0),
     0,
   )
 

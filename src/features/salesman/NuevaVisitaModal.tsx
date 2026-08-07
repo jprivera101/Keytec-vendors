@@ -16,11 +16,22 @@ interface Props {
   weekId: string
   userId: string
   country: CountryCode
+  /** Si una visita a una tienda ya existente necesita foto. Una tienda nueva siempre la pide,
+   * sin importar esto (queda como su foto permanente). */
+  fotoRequerida: boolean
   onCerrar: () => void
   onCreada: (visita: Visit) => void
 }
 
-export function NuevaVisitaModal({ abierto, weekId, userId, country, onCerrar, onCreada }: Props) {
+export function NuevaVisitaModal({
+  abierto,
+  weekId,
+  userId,
+  country,
+  fotoRequerida,
+  onCerrar,
+  onCreada,
+}: Props) {
   const [archivo, setArchivo] = useState<Blob | null>(null)
   const [lugarId, setLugarId] = useState('')
   const [nuevoLugarNombre, setNuevoLugarNombre] = useState('')
@@ -54,6 +65,9 @@ export function NuevaVisitaModal({ abierto, weekId, userId, country, onCerrar, o
   const creandoTiendaNueva = lugarId === NUEVO_LUGAR || tiendaId === NUEVA_TIENDA
   const tiendaSeleccionada = tiendasQuery.data?.find((t) => t.id === tiendaId)
   const necesitaCompletarDatos = !creandoTiendaNueva && !!tiendaSeleccionada && !tiendaSeleccionada.client_name
+  // Una tienda nueva siempre pide foto (queda como su foto permanente); una ya existente solo
+  // si el admin no desactivó la foto de visita para este vendedor.
+  const fotoNecesaria = creandoTiendaNueva || fotoRequerida
 
   function manejarTiendaIdChange(id: string) {
     setTiendaId(id)
@@ -95,7 +109,7 @@ export function NuevaVisitaModal({ abierto, weekId, userId, country, onCerrar, o
   }
 
   async function manejarGuardar() {
-    if (!archivo) {
+    if (fotoNecesaria && !archivo) {
       setError('Toma una foto de la tienda')
       return
     }
@@ -140,9 +154,13 @@ export function NuevaVisitaModal({ abierto, weekId, userId, country, onCerrar, o
     setEnviando(true)
     try {
       // La foto se sube primero: si la tienda es nueva, esta misma foto (la de su primera
-      // visita) queda guardada de forma permanente como la foto de la tienda.
-      const comprimida = await comprimirImagen(archivo)
-      const path = await subirFoto('visit-photos', userId, comprimida)
+      // visita) queda guardada de forma permanente como la foto de la tienda. Si es una
+      // tienda existente y el vendedor no tomó foto (la tiene desactivada), path queda null.
+      let path: string | null = null
+      if (archivo) {
+        const comprimida = await comprimirImagen(archivo)
+        path = await subirFoto('visit-photos', userId, comprimida)
+      }
 
       let placeId = lugarId
       if (lugarId === NUEVO_LUGAR) {
@@ -157,6 +175,8 @@ export function NuevaVisitaModal({ abierto, weekId, userId, country, onCerrar, o
       let storeId: string
       let storeName: string
       if (creandoTiendaNueva) {
+        // fotoNecesaria ya validó que hay archivo (y por lo tanto path) para una tienda nueva.
+        if (!path) throw new Error('Toma una foto de la tienda')
         const nuevaTienda = await crearTienda({
           place_id: placeId,
           country,
@@ -205,7 +225,10 @@ export function NuevaVisitaModal({ abierto, weekId, userId, country, onCerrar, o
   return (
     <Modal titulo="Nueva visita" abierto={abierto} onCerrar={onCerrar}>
       <div className="space-y-4">
-        <CamaraCaptura etiqueta="Foto de la tienda" onCapturada={setArchivo} />
+        <CamaraCaptura
+          etiqueta={fotoNecesaria ? 'Foto de la tienda' : 'Foto de la tienda (opcional)'}
+          onCapturada={setArchivo}
+        />
 
         <div className="rounded-lg bg-slate-50 p-3 text-sm">
           {buscandoUbicacion && <p className="text-slate-500">Obteniendo ubicación...</p>}

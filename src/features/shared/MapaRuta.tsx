@@ -226,7 +226,7 @@ export function MapaRuta({
             </Marker>
           ))}
           {visitas.map((visita) => {
-            const total = visita.sales.reduce((s, v) => s + Number(v.amount), 0)
+            const total = visita.sales.filter((v) => !v.cancelled).reduce((s, v) => s + Number(v.amount), 0)
             return (
               <Marker
                 key={visita.id}

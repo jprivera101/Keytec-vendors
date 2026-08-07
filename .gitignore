@@ -30,3 +30,6 @@ supabase/.branches
 
 .vercel
 .env*
+
+# graphify (regenerable code-graph cache/output)
+graphify-out/

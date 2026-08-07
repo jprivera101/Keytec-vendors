@@ -131,6 +131,15 @@ export function IconDepositos(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+export function IconVentaCancelada(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M9.3 9.3l5.4 5.4M14.7 9.3l-5.4 5.4" />
+    </Base>
+  )
+}
+
 export function IconParqueo(props: SVGProps<SVGSVGElement>) {
   return (
     <Base {...props}>

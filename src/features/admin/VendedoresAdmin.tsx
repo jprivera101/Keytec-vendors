@@ -210,6 +210,7 @@ function ModalEditarVendedor({
   const [kmPerGallon, setKmPerGallon] = useState(vendedor.km_per_gallon?.toString() ?? '')
   const [parkingEnabled, setParkingEnabled] = useState(vendedor.parking_enabled)
   const [dailyTrackingEnabled, setDailyTrackingEnabled] = useState(vendedor.daily_tracking_enabled)
+  const [visitPhotoRequired, setVisitPhotoRequired] = useState(vendedor.visit_photo_required)
   const [regionId, setRegionId] = useState(vendedor.route_id ?? '')
   const [nuevaRegionNombre, setNuevaRegionNombre] = useState('')
   const [enviando, setEnviando] = useState(false)
@@ -252,6 +253,7 @@ function ModalEditarVendedor({
         km_per_gallon: kmPerGallon ? Number(kmPerGallon) : null,
         parking_enabled: parkingEnabled,
         daily_tracking_enabled: dailyTrackingEnabled,
+        visit_photo_required: visitPhotoRequired,
       })
       onGuardado()
     } catch (e) {
@@ -320,6 +322,18 @@ function ModalEditarVendedor({
           />
           Debe reportar km al empezar/terminar cada día
         </label>
+        <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-700">
+          <input
+            type="checkbox"
+            checked={visitPhotoRequired}
+            onChange={(e) => setVisitPhotoRequired(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 text-brand-700 focus:ring-brand-600/40"
+          />
+          Debe tomar foto al visitar una tienda ya registrada
+        </label>
+        <p className="-mt-2 pl-6 text-xs text-slate-400">
+          La foto de una tienda nueva siempre es obligatoria, sin importar esto.
+        </p>
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Región</label>
           <select

@@ -12,6 +12,7 @@ import type {
   ResumenAdmin,
   Sale,
   TopLugarDelMes,
+  VentaCancelada,
   VentaEnvio,
   Visit,
   VisitWithSales,
@@ -124,7 +125,8 @@ export async function crearVisita(input: {
   week_id: string
   store_id: string
   store_name: string | null
-  photo_path: string
+  /** Null si la tienda ya existía y el vendedor tiene la foto de visita desactivada. */
+  photo_path: string | null
   latitude: number
   longitude: number
   notes: string | null
@@ -142,6 +144,28 @@ export async function crearVenta(input: {
   const { data, error } = await supabase.from('sales').insert(input).select('*').single()
   if (error) throw error
   return data
+}
+
+/** Admin: corrige un monto de venta mal tecleado, sin tocar la foto ni la visita. */
+export async function editarMontoVenta(id: string, amount: number): Promise<void> {
+  const { error } = await supabase.from('sales').update({ amount }).eq('id', id)
+  if (error) throw error
+}
+
+/** Admin: cancela una venta que nunca debio contar (p.ej. tienda equivocada o duplicada). No
+ * borra la fila -- la marca cancelada, con quien y por que, para que quede en el historial y
+ * se excluya de los totales pero siga visible en el detalle de la visita. */
+export async function cancelarVenta(id: string, motivo: string, adminId: string): Promise<void> {
+  const { error } = await supabase
+    .from('sales')
+    .update({
+      cancelled: true,
+      cancelled_at: new Date().toISOString(),
+      cancelled_by: adminId,
+      cancel_reason: motivo,
+    })
+    .eq('id', id)
+  if (error) throw error
 }
 
 export async function obtenerVisitasConVentas(weekId: string): Promise<VisitWithSales[]> {
@@ -228,6 +252,134 @@ export async function crearVentaEnvio(input: {
   const { data, error } = await supabase.from('shipment_sales').insert(input).select('*').single()
   if (error) throw error
   return data
+}
+
+/** Admin: corrige un monto de venta por envío mal tecleado. */
+export async function editarMontoVentaEnvio(id: string, amount: number): Promise<void> {
+  const { error } = await supabase.from('shipment_sales').update({ amount }).eq('id', id)
+  if (error) throw error
+}
+
+/** Admin: cancela una venta por envío que nunca debio contar. Ver cancelarVenta. */
+export async function cancelarVentaEnvio(id: string, motivo: string, adminId: string): Promise<void> {
+  const { error } = await supabase
+    .from('shipment_sales')
+    .update({
+      cancelled: true,
+      cancelled_at: new Date().toISOString(),
+      cancelled_by: adminId,
+      cancel_reason: motivo,
+    })
+    .eq('id', id)
+  if (error) throw error
+}
+
+interface FilaVentaCancelada {
+  id: string
+  amount: number
+  visit_id: string
+  cancelled_at: string
+  cancel_reason: string
+  cancelador: { full_name: string } | null
+}
+
+interface FilaEnvioCancelado {
+  id: string
+  amount: number
+  week_id: string
+  client_name: string
+  cancelled_at: string
+  cancel_reason: string
+  cancelador: { full_name: string } | null
+}
+
+/** Ventas y ventas por envío canceladas (con quién, cuándo y por qué), para el reporte de
+ * auditoría del admin. Dos pasos -- semanas del país primero, ventas después -- en vez de
+ * filtrar por país en un solo query anidado: filtrar 3 saltos abajo (sales -> visits ->
+ * weeks -> profiles) por dot-path no es confiable en PostgREST. */
+export async function obtenerVentasCanceladas(
+  pais: CountryCode | 'ALL',
+  region: string | 'ALL' = 'ALL',
+): Promise<VentaCancelada[]> {
+  let semanasQuery = supabase
+    .from('weeks')
+    .select('id, profiles!inner(full_name, country, route_id)')
+  if (pais !== 'ALL') semanasQuery = semanasQuery.eq('profiles.country', pais)
+  if (region !== 'ALL') semanasQuery = semanasQuery.eq('profiles.route_id', region)
+  const { data: semanas, error: semanasError } = await semanasQuery
+  if (semanasError) throw semanasError
+  if (!semanas || semanas.length === 0) return []
+
+  const infoPorWeekId = new Map(
+    (semanas as unknown as { id: string; profiles: { full_name: string; country: CountryCode } }[]).map((s) => [
+      s.id,
+      s.profiles,
+    ]),
+  )
+  const weekIds = Array.from(infoPorWeekId.keys())
+
+  const { data: visitas, error: visitasError } = await supabase
+    .from('visits')
+    .select('id, week_id, store_name')
+    .in('week_id', weekIds)
+  if (visitasError) throw visitasError
+  const visitaPorId = new Map((visitas ?? []).map((v) => [v.id, v]))
+  const visitIds = Array.from(visitaPorId.keys())
+
+  const resultado: VentaCancelada[] = []
+
+  if (visitIds.length > 0) {
+    const { data: ventas, error: ventasError } = await supabase
+      .from('sales')
+      .select('id, amount, visit_id, cancelled_at, cancel_reason, cancelador:profiles!sales_cancelled_by_fkey(full_name)')
+      .in('visit_id', visitIds)
+      .eq('cancelled', true)
+    if (ventasError) throw ventasError
+
+    for (const v of (ventas ?? []) as unknown as FilaVentaCancelada[]) {
+      const visita = visitaPorId.get(v.visit_id)
+      const info = visita ? infoPorWeekId.get(visita.week_id) : undefined
+      resultado.push({
+        id: v.id,
+        origen: 'venta',
+        amount: Number(v.amount),
+        storeName: visita?.store_name ?? null,
+        clientName: null,
+        salesmanName: info?.full_name ?? 'Vendedor',
+        country: info?.country ?? null,
+        cancelledAt: v.cancelled_at,
+        cancelledByName: v.cancelador?.full_name ?? 'Admin',
+        cancelReason: v.cancel_reason,
+      })
+    }
+  }
+
+  const { data: envios, error: enviosError } = await supabase
+    .from('shipment_sales')
+    .select(
+      'id, amount, week_id, client_name, cancelled_at, cancel_reason, cancelador:profiles!shipment_sales_cancelled_by_fkey(full_name)',
+    )
+    .in('week_id', weekIds)
+    .eq('cancelled', true)
+  if (enviosError) throw enviosError
+
+  for (const e of (envios ?? []) as unknown as FilaEnvioCancelado[]) {
+    const info = infoPorWeekId.get(e.week_id)
+    resultado.push({
+      id: e.id,
+      origen: 'envio',
+      amount: Number(e.amount),
+      storeName: null,
+      clientName: e.client_name,
+      salesmanName: info?.full_name ?? 'Vendedor',
+      country: info?.country ?? null,
+      cancelledAt: e.cancelled_at,
+      cancelledByName: e.cancelador?.full_name ?? 'Admin',
+      cancelReason: e.cancel_reason,
+    })
+  }
+
+  return resultado.sort((a, b) => b.cancelledAt.localeCompare(a.cancelledAt))
 }
 
 export async function obtenerVentasEnvioDeSemana(weekId: string): Promise<VentaEnvio[]> {
@@ -478,6 +630,7 @@ export async function actualizarVendedor(
     username?: string
     parking_enabled?: boolean
     daily_tracking_enabled?: boolean
+    visit_photo_required?: boolean
   },
 ): Promise<void> {
   const { error } = await supabase.from('profiles').update(input).eq('id', id)
@@ -565,6 +718,7 @@ export async function obtenerResumenAdmin(
       .from('sales')
       .select('amount, visit_id')
       .in('visit_id', visitIds)
+      .eq('cancelled', false)
     if (ventasError) throw ventasError
 
     for (const venta of ventas ?? []) {
@@ -581,6 +735,7 @@ export async function obtenerResumenAdmin(
     .from('shipment_sales')
     .select('amount, week_id')
     .in('week_id', weekIds)
+    .eq('cancelled', false)
   if (ventasEnvioError) throw ventasEnvioError
 
   for (const venta of ventasEnvio ?? []) {
@@ -620,6 +775,7 @@ async function metricasPorSemana(weekIds: string[]): Promise<Map<string, { visit
     .from('visits')
     .select('week_id, sales(amount)')
     .in('week_id', weekIds)
+    .eq('sales.cancelled', false)
   if (error) throw error
 
   for (const v of (visitas ?? []) as unknown as { week_id: string; sales: { amount: number }[] }[]) {
@@ -633,6 +789,7 @@ async function metricasPorSemana(weekIds: string[]): Promise<Map<string, { visit
     .from('shipment_sales')
     .select('week_id, amount')
     .in('week_id', weekIds)
+    .eq('cancelled', false)
   if (enviosError) throw enviosError
 
   for (const e of envios ?? []) {
@@ -878,6 +1035,7 @@ export async function obtenerTopLugaresDelMes(pais: CountryCode | 'ALL' = 'ALL')
     .from('sales')
     .select('amount, visit_id')
     .in('visit_id', visitIds)
+    .eq('cancelled', false)
   if (ventasError) throw ventasError
 
   const totalPorStoreId = new Map<string, number>()

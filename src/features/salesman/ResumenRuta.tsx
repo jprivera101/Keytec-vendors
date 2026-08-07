@@ -90,8 +90,10 @@ export function ResumenRuta({ weekId, puedeAgregarVenta = false, onAgregarVenta 
   const parqueos = parqueosSemanaQuery.data ?? []
   const parqueoAbierto = parqueoAbiertoQuery.data ?? null
   const totalVentas =
-    visitas.reduce((suma, v) => suma + v.sales.reduce((s, venta) => s + Number(venta.amount), 0), 0) +
-    ventasEnvio.reduce((suma, v) => suma + Number(v.amount), 0)
+    visitas.reduce(
+      (suma, v) => suma + v.sales.filter((venta) => !venta.cancelled).reduce((s, venta) => s + Number(venta.amount), 0),
+      0,
+    ) + ventasEnvio.filter((v) => !v.cancelled).reduce((suma, v) => suma + Number(v.amount), 0)
   const tiendasDistintas = new Set(visitas.map((v) => v.store_id ?? v.store_name ?? v.id)).size
   const kmRecorridos =
     semana.end_mileage_km != null ? semana.end_mileage_km - semana.start_mileage_km : null

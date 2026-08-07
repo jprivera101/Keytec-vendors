@@ -12,6 +12,7 @@ import {
   IconRoles,
   IconTiendas,
   IconVendedores,
+  IconVentaCancelada,
 } from '../../components/icons'
 import { Flag } from '../../components/flags'
 import type { CountryCode, Profile } from '../../lib/types'
@@ -62,6 +63,7 @@ export function AdminLayout() {
     { to: '/admin/tiendas', etiqueta: 'Tiendas', fin: false, Icono: IconTiendas },
     { to: '/admin/analitica', etiqueta: 'Analítica', fin: false, Icono: IconAnalitica },
     { to: '/admin/depositos', etiqueta: 'Depósitos', fin: false, Icono: IconDepositos },
+    { to: '/admin/ventas-canceladas', etiqueta: 'Ventas canceladas', fin: false, Icono: IconVentaCancelada },
     ...(esSuperAdmin ? [{ to: '/admin/roles', etiqueta: 'Roles', fin: false, Icono: IconRoles }] : []),
   ]
 

@@ -18,6 +18,9 @@ export interface Profile {
   parking_enabled: boolean
   /** Si debe reportar km al empezar/terminar cada día (no solo la semana completa). */
   daily_tracking_enabled: boolean
+  /** Si una visita a una tienda ya existente necesita foto. Una tienda nueva siempre la pide
+   * (queda como foto permanente de la tienda), sin importar este valor. */
+  visit_photo_required: boolean
   /** true si la contraseña actual es temporal (recien creada o restablecida) y debe
    * reemplazarse antes de dejar usar el resto de la app. */
   must_change_password: boolean
@@ -79,7 +82,9 @@ export interface Visit {
   week_id: string
   store_id: string | null
   store_name: string | null
-  photo_path: string
+  /** Null cuando la tienda ya existía y el vendedor tiene la foto de visita desactivada. Una
+   * tienda nueva siempre trae foto (queda como la foto permanente de la tienda). */
+  photo_path: string | null
   latitude: number
   longitude: number
   notes: string | null
@@ -95,6 +100,10 @@ export interface Sale {
   processed: boolean
   processed_at: string | null
   processed_by: string | null
+  cancelled: boolean
+  cancelled_at: string | null
+  cancelled_by: string | null
+  cancel_reason: string | null
 }
 
 export interface VisitWithSales extends Visit {
@@ -122,6 +131,10 @@ export interface VentaEnvio {
   processed: boolean
   processed_at: string | null
   processed_by: string | null
+  cancelled: boolean
+  cancelled_at: string | null
+  cancelled_by: string | null
+  cancel_reason: string | null
   created_at: string
 }
 
@@ -205,6 +218,20 @@ export interface DailyTracking {
   end_photo_path: string | null
   started_at: string
   ended_at: string | null
+}
+
+/** Una venta cancelada (de tienda o por envío), para el reporte de auditoría del admin. */
+export interface VentaCancelada {
+  id: string
+  origen: 'venta' | 'envio'
+  amount: number
+  storeName: string | null
+  clientName: string | null
+  salesmanName: string
+  country: CountryCode | null
+  cancelledAt: string
+  cancelledByName: string
+  cancelReason: string
 }
 
 export interface TiendaConLugar extends Store {

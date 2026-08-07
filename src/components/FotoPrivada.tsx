@@ -3,7 +3,7 @@ import { obtenerUrlFirmada, type BucketFotos } from '../lib/storage'
 
 interface Props {
   bucket: BucketFotos
-  path: string
+  path: string | null
   className?: string
   alt: string
 }
@@ -13,6 +13,7 @@ export function FotoPrivada({ bucket, path, className, alt }: Props) {
   const [fallo, setFallo] = useState(false)
 
   useEffect(() => {
+    if (!path) return
     let activo = true
     setUrl(null)
     setFallo(false)
@@ -28,6 +29,16 @@ export function FotoPrivada({ bucket, path, className, alt }: Props) {
       activo = false
     }
   }, [bucket, path])
+
+  if (!path) {
+    return (
+      <div
+        className={`${className ?? ''} flex items-center justify-center bg-slate-100 text-center text-[10px] text-slate-400`}
+      >
+        Sin foto
+      </div>
+    )
+  }
 
   if (fallo) {
     return (

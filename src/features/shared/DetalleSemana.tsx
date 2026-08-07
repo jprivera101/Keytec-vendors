@@ -33,6 +33,7 @@ export function DetalleSemana({
   puedeEditarGasolina = false,
   puedeReabrirTracking = false,
   puedeEditarKm = false,
+  puedeGestionarVentas = false,
 }: {
   weekId: string
   tiendasRegion?: TiendaConLugar[]
@@ -43,6 +44,8 @@ export function DetalleSemana({
   puedeReabrirTracking?: boolean
   /** Super admin: puede corregir un km mal tecleado (semana y tracking diario). */
   puedeEditarKm?: boolean
+  /** Admin/super_admin: puede corregir el monto o cancelar una venta (con motivo). */
+  puedeGestionarVentas?: boolean
 }) {
   const queryClient = useQueryClient()
   const semanaQuery = useQuery({
@@ -87,11 +90,13 @@ export function DetalleSemana({
   const parqueos = parqueosQuery.data ?? []
   const tracking = trackingQuery.data ?? []
   const totalVentas =
-    visitas.reduce((suma, v) => suma + v.sales.reduce((s, venta) => s + Number(venta.amount), 0), 0) +
-    ventasEnvio.reduce((suma, v) => suma + Number(v.amount), 0)
+    visitas.reduce(
+      (suma, v) => suma + v.sales.filter((venta) => !venta.cancelled).reduce((s, venta) => s + Number(venta.amount), 0),
+      0,
+    ) + ventasEnvio.filter((v) => !v.cancelled).reduce((suma, v) => suma + Number(v.amount), 0)
   const totalGasolina = gasolina.reduce((suma, g) => suma + Number(g.amount), 0)
   const ventasSinProcesar = visitas.reduce(
-    (suma, v) => suma + v.sales.filter((venta) => !venta.processed).length,
+    (suma, v) => suma + v.sales.filter((venta) => !venta.processed && !venta.cancelled).length,
     0,
   )
   const kmRecorridos =
@@ -144,6 +149,7 @@ export function DetalleSemana({
             puedeAgregarVenta={puedeAgregarVenta}
             onAgregarVenta={onAgregarVenta}
             country={country}
+            puedeGestionarVentas={puedeGestionarVentas}
           />
         ))}
         {visitas.length === 0 && <p className="text-sm text-slate-400">Sin visitas registradas.</p>}
@@ -154,7 +160,12 @@ export function DetalleSemana({
           <h3 className="mb-2 text-sm font-semibold text-slate-500">Ventas por envío</h3>
           <div className="space-y-3">
             {ventasEnvio.map((venta) => (
-              <EnvioCard key={venta.id} venta={venta} country={country} />
+              <EnvioCard
+                key={venta.id}
+                venta={venta}
+                country={country}
+                puedeGestionarVentas={puedeGestionarVentas}
+              />
             ))}
           </div>
         </div>

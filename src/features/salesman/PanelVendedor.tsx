@@ -78,9 +78,12 @@ export function PanelVendedor() {
 
   const totalVentas =
     (visitasQuery.data ?? []).reduce(
-      (suma, v) => suma + v.sales.reduce((s, venta) => s + Number(venta.amount), 0),
+      (suma, v) => suma + v.sales.filter((venta) => !venta.cancelled).reduce((s, venta) => s + Number(venta.amount), 0),
       0,
-    ) + (ventasEnvioQuery.data ?? []).reduce((suma, v) => suma + Number(v.amount), 0)
+    ) +
+    (ventasEnvioQuery.data ?? [])
+      .filter((v) => !v.cancelled)
+      .reduce((suma, v) => suma + Number(v.amount), 0)
 
   async function manejarIniciarSemana(km: number, fotoPath: string) {
     await crearSemana(userId, km, fotoPath)
@@ -240,6 +243,7 @@ export function PanelVendedor() {
           weekId={semana.id}
           userId={userId}
           country={profile.country}
+          fotoRequerida={profile.visit_photo_required}
           onCerrar={() => setModalVisita(false)}
           onCreada={() => {
             setModalVisita(false)

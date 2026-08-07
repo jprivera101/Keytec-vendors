@@ -98,6 +98,7 @@ export async function obtenerTiendasConEstadisticas(
       .from('sales')
       .select('amount, visit_id')
       .in('visit_id', visitIds)
+      .eq('cancelled', false)
     if (ventasError) throw ventasError
 
     for (const venta of ventas ?? []) {

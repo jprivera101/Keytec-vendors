@@ -162,17 +162,21 @@ interface FilaEnvioOperario {
  * operario mira "Anteriores"/"Todas" -- ahí solo le interesa lo que todavía le falta
  * procesar, no volver a bajar meses de ventas ya cerradas cada vez que abre el panel. */
 export async function obtenerVentasOperario(soloPendientes = false): Promise<VentaOperario[]> {
+  // Una venta cancelada no tiene nada que procesar: se excluye siempre, no solo en el filtro
+  // de pendientes.
   let ventasQuery = supabase
     .from('sales')
     .select(
       'id, amount, photo_path, created_at, processed, visits(store_id, store_name, stores(client_name), weeks(id, status, salesman_id, profiles(full_name, country)))',
     )
+    .eq('cancelled', false)
     .order('created_at', { ascending: false })
   let enviosQuery = supabase
     .from('shipment_sales')
     .select(
       'id, amount, photo_path, created_at, processed, client_name, weeks(id, status, salesman_id, profiles(full_name, country))',
     )
+    .eq('cancelled', false)
     .order('created_at', { ascending: false })
 
   if (soloPendientes) {

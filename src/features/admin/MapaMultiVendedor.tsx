@@ -118,7 +118,7 @@ export function MapaMultiVendedor({ vendedores, country }: Props) {
                   />
                 ))}
                 {visitasOrdenadas.map((visita, idx) => {
-                  const total = visita.sales.reduce((s, v) => s + Number(v.amount), 0)
+                  const total = visita.sales.filter((v) => !v.cancelled).reduce((s, v) => s + Number(v.amount), 0)
                   return (
                     <Marker
                       key={visita.id}
