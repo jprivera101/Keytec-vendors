@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import { Link, useOutletContext, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
+  obtenerConteoTiendas,
+  obtenerConteoTiendasPorPais,
   obtenerTiendaPorId,
   obtenerTiendasConEstadisticas,
   obtenerVisitasDeTienda,
@@ -14,6 +16,7 @@ import { PageHeader } from '../../components/PageHeader'
 import { SeccionColapsable } from '../../components/SeccionColapsable'
 import { IconTiendas } from '../../components/icons'
 import { Flag } from '../../components/flags'
+import { NOMBRE_PAIS } from './AdminLayout'
 import { VisitaCard } from '../shared/VisitaCard'
 import type { AdminOutletContext } from './AdminLayout'
 import type { CountryCode, TiendaConEstadisticas, VisitWithSales } from '../../lib/types'
@@ -64,6 +67,19 @@ function ListaTiendas({ pais }: { pais: AdminOutletContext['pais'] }) {
     queryFn: () => obtenerTiendasConEstadisticas(pais, regionId),
   })
 
+  // Conteo aparte (en vez de tiendasOrdenadas.length): con "Todos" países y muchas tiendas
+  // registradas, la lista completa es pesada de traer, pero el total en si es un dato liviano
+  // que no debería depender de que la tabla haya terminado de cargar.
+  const conteoQuery = useQuery({
+    queryKey: ['tiendas-conteo', pais, regionId],
+    queryFn: () => obtenerConteoTiendas(pais, regionId),
+  })
+  const conteoPorPaisQuery = useQuery({
+    queryKey: ['tiendas-conteo-por-pais'],
+    queryFn: () => obtenerConteoTiendasPorPais(),
+    enabled: pais === 'ALL' && regionId === 'ALL',
+  })
+
   const tiendasOrdenadas = useMemo(
     () => ordenarTiendas(tiendasQuery.data ?? [], orden),
     [tiendasQuery.data, orden],
@@ -104,6 +120,26 @@ function ListaTiendas({ pais }: { pais: AdminOutletContext['pais'] }) {
           )
         }
       />
+
+      <div className="card flex flex-wrap items-center gap-x-6 gap-y-2 p-4">
+        <div>
+          <p className="text-xs text-slate-400">Total tiendas{regionId !== 'ALL' ? ' en esta región' : ''}</p>
+          <p className="mt-0.5 text-2xl font-semibold text-slate-900">
+            {conteoQuery.isLoading ? '…' : (conteoQuery.data ?? 0)}
+          </p>
+        </div>
+        {pais === 'ALL' && regionId === 'ALL' && conteoPorPaisQuery.data && (
+          <div className="flex flex-wrap gap-x-5 gap-y-1">
+            {(['GT', 'SV'] as const).map((c) => (
+              <p key={c} className="flex items-center gap-1.5 text-sm text-slate-500">
+                <Flag country={c} size={14} />
+                {NOMBRE_PAIS[c]}
+                <span className="font-semibold text-slate-700">{conteoPorPaisQuery.data[c] ?? 0}</span>
+              </p>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="card overflow-hidden">
         {tiendasQuery.isLoading && <Spinner />}

@@ -157,3 +157,25 @@ export function IconBandera(props: SVGProps<SVGSVGElement>) {
     </Base>
   )
 }
+
+export function IconExpandir(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <path d="M9 3H3v6" />
+      <path d="M15 21h6v-6" />
+      <path d="M21 3l-8 8" />
+      <path d="M3 21l8-8" />
+    </Base>
+  )
+}
+
+export function IconContraer(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <path d="M3 9h6V3" />
+      <path d="M21 15h-6v6" />
+      <path d="M9 9L2 2" />
+      <path d="M15 15l7 7" />
+    </Base>
+  )
+}

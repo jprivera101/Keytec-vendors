@@ -4,6 +4,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { FotoPrivada } from '../../components/FotoPrivada'
 import { formatMonto } from '../../lib/currency'
+import { IconContraer, IconExpandir } from '../../components/icons'
 import type { VisitaConVendedor } from '../../lib/api'
 import type { CountryCode } from '../../lib/types'
 
@@ -41,6 +42,18 @@ function AjustarLimites({ posiciones }: { posiciones: [number, number][] }) {
   return null
 }
 
+/** Leaflet no detecta por si solo que su contenedor cambio de tamaño (p.ej. al pasar a
+ * pantalla completa), asi que hay que avisarle explicitamente o el mapa queda recortado /
+ * mal centrado hasta el siguiente pan o zoom manual. */
+function InvalidarAlCambiarTamano({ activo }: { activo: boolean }) {
+  const map = useMap()
+  useEffect(() => {
+    const id = setTimeout(() => map.invalidateSize(), 250)
+    return () => clearTimeout(id)
+  }, [map, activo])
+  return null
+}
+
 export interface VendedorConVisitas {
   id: string
   full_name: string
@@ -59,6 +72,7 @@ interface Props {
 export function MapaMultiVendedor({ vendedores, country }: Props) {
   const conVisitas = vendedores.filter((v) => v.visitas.length > 0)
   const [ocultos, setOcultos] = useState<Set<string>>(new Set())
+  const [pantallaCompleta, setPantallaCompleta] = useState(false)
 
   function alternar(id: string) {
     setOcultos((actual) => {
@@ -68,6 +82,15 @@ export function MapaMultiVendedor({ vendedores, country }: Props) {
       return nuevo
     })
   }
+
+  useEffect(() => {
+    if (!pantallaCompleta) return
+    function alPresionarTecla(e: KeyboardEvent) {
+      if (e.key === 'Escape') setPantallaCompleta(false)
+    }
+    document.addEventListener('keydown', alPresionarTecla)
+    return () => document.removeEventListener('keydown', alPresionarTecla)
+  }, [pantallaCompleta])
 
   if (conVisitas.length === 0) {
     return (
@@ -83,8 +106,19 @@ export function MapaMultiVendedor({ vendedores, country }: Props) {
   )
 
   return (
-    <div>
-      <div className="h-96 w-full overflow-hidden rounded-xl">
+    <div className={pantallaCompleta ? 'fixed inset-0 z-[2000] bg-white p-3' : ''}>
+      <div
+        className={`relative w-full overflow-hidden rounded-xl ${pantallaCompleta ? 'h-[calc(100vh-1.5rem)]' : 'h-96'}`}
+      >
+        <button
+          type="button"
+          onClick={() => setPantallaCompleta((actual) => !actual)}
+          aria-label={pantallaCompleta ? 'Salir de pantalla completa' : 'Ver mapa en pantalla completa'}
+          title={pantallaCompleta ? 'Salir de pantalla completa' : 'Ver mapa en pantalla completa'}
+          className="absolute right-2.5 top-2.5 z-[1000] flex h-8 w-8 items-center justify-center rounded-lg bg-white text-slate-600 shadow-md hover:text-slate-900"
+        >
+          {pantallaCompleta ? <IconContraer width={16} height={16} /> : <IconExpandir width={16} height={16} />}
+        </button>
         <MapContainer
           center={todasLasPosiciones[0] ?? [14.6, -90.5]}
           zoom={11}
@@ -98,6 +132,7 @@ export function MapaMultiVendedor({ vendedores, country }: Props) {
             maxZoom={19}
           />
           <AjustarLimites posiciones={todasLasPosiciones} />
+          <InvalidarAlCambiarTamano activo={pantallaCompleta} />
           {conVisitas.map((vendedor, i) => {
             if (ocultos.has(vendedor.id)) return null
             const color = colorDeVendedor(i)

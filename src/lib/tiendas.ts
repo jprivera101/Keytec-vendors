@@ -124,6 +124,29 @@ export async function obtenerTiendasConEstadisticas(
   })
 }
 
+/** Conteo exacto de tiendas segun el filtro (pais/region), sin traer las filas: a diferencia
+ * de obtenerTiendasConEstadisticas, que trae los datos completos y por eso puede toparse con
+ * el limite de filas que devuelve Postgrest por defecto, esto siempre refleja el total real. */
+export async function obtenerConteoTiendas(
+  pais: CountryCode | 'ALL',
+  region: string | 'ALL' = 'ALL',
+): Promise<number> {
+  let query = supabase.from('stores').select('*', { count: 'exact', head: true })
+  if (pais !== 'ALL') query = query.eq('country', pais)
+  if (region !== 'ALL') query = query.eq('route_id', region)
+  const { count, error } = await query
+  if (error) throw error
+  return count ?? 0
+}
+
+/** Desglose del total de tiendas por pais, para cuando el super admin ve "Todos" a la vez.
+ * A diferencia de los montos de venta, un conteo de tiendas si se puede sumar entre paises. */
+export async function obtenerConteoTiendasPorPais(): Promise<Partial<Record<CountryCode, number>>> {
+  const paises: CountryCode[] = ['GT', 'SV']
+  const entradas = await Promise.all(paises.map(async (pais) => [pais, await obtenerConteoTiendas(pais)] as const))
+  return Object.fromEntries(entradas)
+}
+
 export async function obtenerTiendaPorId(storeId: string): Promise<Store> {
   const { data, error } = await supabase.from('stores').select('*').eq('id', storeId).single()
   if (error) throw error

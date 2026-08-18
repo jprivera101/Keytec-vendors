@@ -32,6 +32,10 @@ export function VentasCanceladasAdmin() {
 
       {ventasQuery.isLoading ? (
         <Spinner />
+      ) : ventasQuery.isError ? (
+        <div className="rounded-2xl border border-dashed border-red-200 bg-red-50/60 p-8 text-center text-sm text-red-600">
+          No se pudo cargar el historial: {(ventasQuery.error as Error)?.message ?? 'error desconocido'}.
+        </div>
       ) : ventas.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-8 text-center text-sm text-slate-400">
           No hay ventas canceladas en este alcance.
