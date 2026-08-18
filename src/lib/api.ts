@@ -287,110 +287,52 @@ export async function cancelarVentaEnvio(id: string, motivo: string, adminId: st
 
 interface FilaVentaCancelada {
   id: string
+  origen: 'venta' | 'envio'
   amount: number
-  visit_id: string
+  store_name: string | null
+  client_name: string | null
+  salesman_name: string
+  country: CountryCode | null
+  route_id: string | null
   cancelled_at: string
+  cancelled_by_name: string
   cancel_reason: string
-  cancelador: { full_name: string } | null
-}
-
-interface FilaEnvioCancelado {
-  id: string
-  amount: number
-  week_id: string
-  client_name: string
-  cancelled_at: string
-  cancel_reason: string
-  cancelador: { full_name: string } | null
 }
 
 /** Ventas y ventas por envío canceladas (con quién, cuándo y por qué), para el reporte de
- * auditoría del admin. Dos pasos -- semanas del país primero, ventas después -- en vez de
- * filtrar por país en un solo query anidado: filtrar 3 saltos abajo (sales -> visits ->
- * weeks -> profiles) por dot-path no es confiable en PostgREST. */
+ * auditoría del admin. Lee de la vista "ventas_canceladas" (ver migración 0044), que hace el
+ * JOIN completo (sales/shipment_sales -> visits/weeks -> profiles) del lado de la base de
+ * datos: la version anterior armaba esa cadena en el cliente (semanas -> visitas -> ventas),
+ * y con miles de visitas historicas la lista de ids del ultimo paso crecia tanto que la
+ * consulta fallaba con "Bad Request" antes de llegar a Postgres. */
 export async function obtenerVentasCanceladas(
   pais: CountryCode | 'ALL',
   region: string | 'ALL' = 'ALL',
 ): Promise<VentaCancelada[]> {
-  let semanasQuery = supabase
-    .from('weeks')
-    .select('id, profiles!inner(full_name, country, route_id)')
-  if (pais !== 'ALL') semanasQuery = semanasQuery.eq('profiles.country', pais)
-  if (region !== 'ALL') semanasQuery = semanasQuery.eq('profiles.route_id', region)
-  const { data: semanas, error: semanasError } = await semanasQuery
-  if (semanasError) throw semanasError
-  if (!semanas || semanas.length === 0) return []
-
-  const infoPorWeekId = new Map(
-    (semanas as unknown as { id: string; profiles: { full_name: string; country: CountryCode } }[]).map((s) => [
-      s.id,
-      s.profiles,
-    ]),
-  )
-  const weekIds = Array.from(infoPorWeekId.keys())
-
-  const { data: visitas, error: visitasError } = await supabase
-    .from('visits')
-    .select('id, week_id, store_name')
-    .in('week_id', weekIds)
-  if (visitasError) throw visitasError
-  const visitaPorId = new Map((visitas ?? []).map((v) => [v.id, v]))
-  const visitIds = Array.from(visitaPorId.keys())
-
-  const resultado: VentaCancelada[] = []
-
-  if (visitIds.length > 0) {
-    const { data: ventas, error: ventasError } = await supabase
-      .from('sales')
-      .select('id, amount, visit_id, cancelled_at, cancel_reason, cancelador:profiles!sales_cancelled_by_fkey(full_name)')
-      .in('visit_id', visitIds)
-      .eq('cancelled', true)
-    if (ventasError) throw ventasError
-
-    for (const v of (ventas ?? []) as unknown as FilaVentaCancelada[]) {
-      const visita = visitaPorId.get(v.visit_id)
-      const info = visita ? infoPorWeekId.get(visita.week_id) : undefined
-      resultado.push({
-        id: v.id,
-        origen: 'venta',
-        amount: Number(v.amount),
-        storeName: visita?.store_name ?? null,
-        clientName: null,
-        salesmanName: info?.full_name ?? 'Vendedor',
-        country: info?.country ?? null,
-        cancelledAt: v.cancelled_at,
-        cancelledByName: v.cancelador?.full_name ?? 'Admin',
-        cancelReason: v.cancel_reason,
-      })
-    }
-  }
-
-  const { data: envios, error: enviosError } = await supabase
-    .from('shipment_sales')
+  let query = supabase
+    .from('ventas_canceladas')
     .select(
-      'id, amount, week_id, client_name, cancelled_at, cancel_reason, cancelador:profiles!shipment_sales_cancelled_by_fkey(full_name)',
+      'id, origen, amount, store_name, client_name, salesman_name, country, route_id, cancelled_at, cancelled_by_name, cancel_reason',
     )
-    .in('week_id', weekIds)
-    .eq('cancelled', true)
-  if (enviosError) throw enviosError
+    .order('cancelled_at', { ascending: false })
+  if (pais !== 'ALL') query = query.eq('country', pais)
+  if (region !== 'ALL') query = query.eq('route_id', region)
 
-  for (const e of (envios ?? []) as unknown as FilaEnvioCancelado[]) {
-    const info = infoPorWeekId.get(e.week_id)
-    resultado.push({
-      id: e.id,
-      origen: 'envio',
-      amount: Number(e.amount),
-      storeName: null,
-      clientName: e.client_name,
-      salesmanName: info?.full_name ?? 'Vendedor',
-      country: info?.country ?? null,
-      cancelledAt: e.cancelled_at,
-      cancelledByName: e.cancelador?.full_name ?? 'Admin',
-      cancelReason: e.cancel_reason,
-    })
-  }
+  const { data, error } = await query
+  if (error) throw error
 
-  return resultado.sort((a, b) => b.cancelledAt.localeCompare(a.cancelledAt))
+  return (data as unknown as FilaVentaCancelada[]).map((fila) => ({
+    id: fila.id,
+    origen: fila.origen,
+    amount: Number(fila.amount),
+    storeName: fila.store_name,
+    clientName: fila.client_name,
+    salesmanName: fila.salesman_name,
+    country: fila.country,
+    cancelledAt: fila.cancelled_at,
+    cancelledByName: fila.cancelled_by_name,
+    cancelReason: fila.cancel_reason,
+  }))
 }
 
 export async function obtenerVentasEnvioDeSemana(weekId: string): Promise<VentaEnvio[]> {

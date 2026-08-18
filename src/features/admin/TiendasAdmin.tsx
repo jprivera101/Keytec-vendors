@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useOutletContext, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -7,6 +7,7 @@ import {
   obtenerTiendaPorId,
   obtenerTiendasConEstadisticas,
   obtenerVisitasDeTienda,
+  TIENDAS_POR_PAGINA,
 } from '../../lib/tiendas'
 import { obtenerRegionesPorPais } from '../../lib/regiones'
 import { formatMonto } from '../../lib/currency'
@@ -19,23 +20,10 @@ import { Flag } from '../../components/flags'
 import { NOMBRE_PAIS } from './AdminLayout'
 import { VisitaCard } from '../shared/VisitaCard'
 import type { AdminOutletContext } from './AdminLayout'
-import type { CountryCode, TiendaConEstadisticas, VisitWithSales } from '../../lib/types'
+import type { CampoOrdenTiendas } from '../../lib/tiendas'
+import type { CountryCode, VisitWithSales } from '../../lib/types'
 
-type CampoOrden = 'lugar' | 'visitas' | 'ventas' | 'ultimaVisita'
-type Orden = { campo: CampoOrden; direccion: 'asc' | 'desc' }
-
-function ordenarTiendas(tiendas: TiendaConEstadisticas[], orden: Orden) {
-  const factor = orden.direccion === 'asc' ? 1 : -1
-  return [...tiendas].sort((a, b) => {
-    if (orden.campo === 'lugar') return (a.placeName ?? '').localeCompare(b.placeName ?? '') * factor
-    if (orden.campo === 'visitas') return (a.totalVisitas - b.totalVisitas) * factor
-    if (orden.campo === 'ventas') return (a.totalVentas - b.totalVentas) * factor
-    // Última visita: las tiendas sin visitas quedan siempre al final, sin importar la dirección.
-    const av = a.ultimaVisita ? new Date(a.ultimaVisita).getTime() : -Infinity
-    const bv = b.ultimaVisita ? new Date(b.ultimaVisita).getTime() : -Infinity
-    return (av - bv) * factor
-  })
-}
+type Orden = { campo: CampoOrdenTiendas; direccion: 'asc' | 'desc' }
 
 export function TiendasAdmin() {
   const { pais } = useOutletContext<AdminOutletContext>()
@@ -55,6 +43,13 @@ export function TiendasAdmin() {
 function ListaTiendas({ pais }: { pais: AdminOutletContext['pais'] }) {
   const [regionId, setRegionId] = useState<string | 'ALL'>('ALL')
   const [orden, setOrden] = useState<Orden>({ campo: 'ultimaVisita', direccion: 'desc' })
+  const [pagina, setPagina] = useState(0)
+
+  // Si cambia el filtro o el orden, la pagina en la que estabamos ya no tiene sentido (podria
+  // quedar mas alla del ultimo resultado del nuevo filtro).
+  useEffect(() => {
+    setPagina(0)
+  }, [pais, regionId, orden])
 
   const regionesQuery = useQuery({
     queryKey: ['regiones-tiendas', pais],
@@ -63,13 +58,13 @@ function ListaTiendas({ pais }: { pais: AdminOutletContext['pais'] }) {
   })
 
   const tiendasQuery = useQuery({
-    queryKey: ['tiendas-stats', pais, regionId],
-    queryFn: () => obtenerTiendasConEstadisticas(pais, regionId),
+    queryKey: ['tiendas-stats', pais, regionId, pagina, orden],
+    queryFn: () => obtenerTiendasConEstadisticas(pais, regionId, pagina, orden),
   })
 
-  // Conteo aparte (en vez de tiendasOrdenadas.length): con "Todos" países y muchas tiendas
-  // registradas, la lista completa es pesada de traer, pero el total en si es un dato liviano
-  // que no debería depender de que la tabla haya terminado de cargar.
+  // Conteo aparte (en vez del total que ya trae tiendasQuery): con "Todos" países y muchas
+  // tiendas registradas, la lista paginada es mas lenta de traer, pero el total en si es un
+  // dato liviano que no debería depender de que la tabla haya terminado de cargar.
   const conteoQuery = useQuery({
     queryKey: ['tiendas-conteo', pais, regionId],
     queryFn: () => obtenerConteoTiendas(pais, regionId),
@@ -80,12 +75,10 @@ function ListaTiendas({ pais }: { pais: AdminOutletContext['pais'] }) {
     enabled: pais === 'ALL' && regionId === 'ALL',
   })
 
-  const tiendasOrdenadas = useMemo(
-    () => ordenarTiendas(tiendasQuery.data ?? [], orden),
-    [tiendasQuery.data, orden],
-  )
+  const tiendas = tiendasQuery.data?.tiendas ?? []
+  const totalPaginas = Math.max(1, Math.ceil((tiendasQuery.data?.total ?? 0) / TIENDAS_POR_PAGINA))
 
-  function alternarOrden(campo: CampoOrden) {
+  function alternarOrden(campo: CampoOrdenTiendas) {
     setOrden((actual) =>
       actual.campo === campo
         ? { campo, direccion: actual.direccion === 'asc' ? 'desc' : 'asc' }
@@ -178,7 +171,14 @@ function ListaTiendas({ pais }: { pais: AdminOutletContext['pais'] }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {tiendasOrdenadas.map((tienda) => (
+            {tiendasQuery.isError && (
+              <tr>
+                <td colSpan={pais === 'ALL' ? 9 : 8} className="px-4 py-6 text-center text-sm text-red-600">
+                  No se pudieron cargar las tiendas: {(tiendasQuery.error as Error)?.message ?? 'error desconocido'}.
+                </td>
+              </tr>
+            )}
+            {tiendas.map((tienda) => (
               <tr key={tienda.id}>
                 <td className="px-4 py-3 font-medium text-slate-900">
                   <Link to={`/admin/tiendas/${tienda.id}`} className="hover:text-brand-700">
@@ -206,7 +206,7 @@ function ListaTiendas({ pais }: { pais: AdminOutletContext['pais'] }) {
                 </td>
               </tr>
             ))}
-            {tiendasOrdenadas.length === 0 && (
+            {!tiendasQuery.isError && !tiendasQuery.isLoading && tiendas.length === 0 && (
               <tr>
                 <td colSpan={pais === 'ALL' ? 9 : 8} className="px-4 py-6 text-center text-sm text-slate-400">
                   Todavía no hay tiendas registradas.
@@ -215,6 +215,32 @@ function ListaTiendas({ pais }: { pais: AdminOutletContext['pais'] }) {
             )}
           </tbody>
         </table>
+
+        {tiendas.length > 0 && (
+          <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-sm text-slate-500">
+            <p>
+              Página {pagina + 1} de {totalPaginas} · {tiendasQuery.data?.total ?? 0} tiendas
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setPagina((p) => Math.max(0, p - 1))}
+                disabled={pagina === 0}
+                className="btn-ghost btn-sm disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                ← Anterior
+              </button>
+              <button
+                type="button"
+                onClick={() => setPagina((p) => Math.min(totalPaginas - 1, p + 1))}
+                disabled={pagina >= totalPaginas - 1}
+                className="btn-ghost btn-sm disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Siguiente →
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </>
   )
@@ -227,7 +253,7 @@ function EncabezadoOrdenable({
   onClick,
 }: {
   etiqueta: string
-  campo: CampoOrden
+  campo: CampoOrdenTiendas
   orden: Orden
   onClick: () => void
 }) {

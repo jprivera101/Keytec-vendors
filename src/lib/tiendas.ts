@@ -56,72 +56,59 @@ export async function obtenerTiendasPorRegion(regionId: string): Promise<TiendaC
   })
 }
 
-/** Lista de tiendas del pais (o de todos, si pais es 'ALL'), opcionalmente filtrada por
- * region, con sus totales de visitas/ventas. */
+export const TIENDAS_POR_PAGINA = 50
+
+export type CampoOrdenTiendas = 'lugar' | 'visitas' | 'ventas' | 'ultimaVisita'
+
+const COLUMNA_ORDEN: Record<CampoOrdenTiendas, string> = {
+  lugar: 'place_name',
+  visitas: 'total_visitas',
+  ventas: 'total_ventas',
+  ultimaVisita: 'ultima_visita',
+}
+
+interface FilaTiendaConEstadisticas extends Store {
+  place_name: string | null
+  region_name: string | null
+  total_visitas: number
+  total_ventas: number
+  ultima_visita: string | null
+}
+
+/** Una pagina (50 tiendas) del pais/region elegido, con sus totales de visitas/ventas ya
+ * calculados y ordenados en la base de datos. Lee de la vista "stores_con_estadisticas" (ver
+ * migración 0044) en vez de traer cada tienda y despues encadenar .in(storeIds) sobre visits y
+ * .in(visitIds) sobre sales: esas listas de ids, en produccion, crecen tanto que la consulta
+ * fallaba (URL demasiado larga) mucho antes de completar una sola pagina. */
 export async function obtenerTiendasConEstadisticas(
   pais: CountryCode | 'ALL',
   region: string | 'ALL' = 'ALL',
-): Promise<TiendaConEstadisticas[]> {
-  let storesQuery = supabase.from('stores').select('*, places(name), routes(name)')
-  if (pais !== 'ALL') storesQuery = storesQuery.eq('country', pais)
-  if (region !== 'ALL') storesQuery = storesQuery.eq('route_id', region)
-  const { data: stores, error: storesError } = await storesQuery.order('name', { ascending: true })
-  if (storesError) throw storesError
-  if (!stores || stores.length === 0) return []
+  pagina = 0,
+  orden: { campo: CampoOrdenTiendas; direccion: 'asc' | 'desc' } = { campo: 'ultimaVisita', direccion: 'desc' },
+): Promise<{ tiendas: TiendaConEstadisticas[]; total: number }> {
+  let query = supabase.from('stores_con_estadisticas').select('*', { count: 'exact' })
+  if (pais !== 'ALL') query = query.eq('country', pais)
+  if (region !== 'ALL') query = query.eq('route_id', region)
 
-  const storeIds = stores.map((s) => s.id)
-  const { data: visitas, error: visitasError } = await supabase
-    .from('visits')
-    .select('id, store_id, captured_at')
-    .in('store_id', storeIds)
-  if (visitasError) throw visitasError
+  const desde = pagina * TIENDAS_POR_PAGINA
+  const { data, count, error } = await query
+    .order(COLUMNA_ORDEN[orden.campo], { ascending: orden.direccion === 'asc', nullsFirst: false })
+    .range(desde, desde + TIENDAS_POR_PAGINA - 1)
+  if (error) throw error
 
-  const visitIdAStoreId = new Map<string, string>()
-  const visitasPorTienda = new Map<string, number>()
-  const ultimaVisitaPorTienda = new Map<string, string>()
-
-  for (const visita of visitas ?? []) {
-    if (!visita.store_id) continue
-    visitIdAStoreId.set(visita.id, visita.store_id)
-    visitasPorTienda.set(visita.store_id, (visitasPorTienda.get(visita.store_id) ?? 0) + 1)
-    const actual = ultimaVisitaPorTienda.get(visita.store_id)
-    if (!actual || visita.captured_at > actual) {
-      ultimaVisitaPorTienda.set(visita.store_id, visita.captured_at)
-    }
-  }
-
-  const visitIds = Array.from(visitIdAStoreId.keys())
-  const ventasPorTienda = new Map<string, number>()
-
-  if (visitIds.length > 0) {
-    const { data: ventas, error: ventasError } = await supabase
-      .from('sales')
-      .select('amount, visit_id')
-      .in('visit_id', visitIds)
-      .eq('cancelled', false)
-    if (ventasError) throw ventasError
-
-    for (const venta of ventas ?? []) {
-      const storeId = visitIdAStoreId.get(venta.visit_id)
-      if (!storeId) continue
-      ventasPorTienda.set(storeId, (ventasPorTienda.get(storeId) ?? 0) + Number(venta.amount))
-    }
-  }
-
-  return stores.map((store) => {
-    const { places, routes, ...resto } = store as typeof store & {
-      places: { name: string } | null
-      routes: { name: string } | null
-    }
+  const tiendas = (data as unknown as FilaTiendaConEstadisticas[]).map((fila) => {
+    const { place_name, region_name, total_visitas, total_ventas, ultima_visita, ...resto } = fila
     return {
       ...resto,
-      placeName: places?.name ?? null,
-      regionName: routes?.name ?? null,
-      totalVisitas: visitasPorTienda.get(store.id) ?? 0,
-      totalVentas: ventasPorTienda.get(store.id) ?? 0,
-      ultimaVisita: ultimaVisitaPorTienda.get(store.id) ?? null,
+      placeName: place_name,
+      regionName: region_name,
+      totalVisitas: total_visitas,
+      totalVentas: Number(total_ventas),
+      ultimaVisita: ultima_visita,
     }
   })
+
+  return { tiendas, total: count ?? 0 }
 }
 
 /** Conteo exacto de tiendas segun el filtro (pais/region), sin traer las filas: a diferencia
