@@ -1,10 +1,11 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { FotoPrivada } from '../../components/FotoPrivada'
 import { formatMonto } from '../../lib/currency'
 import { fechaLocalISO } from '../../lib/fechas'
+import { IconContraer, IconExpandir } from '../../components/icons'
 import type { CountryCode, ParkingSpot, TiendaConLugar, VisitWithSales } from '../../lib/types'
 
 // Colores de marca, uno por día de la ruta (para distinguir de un vistazo qué visitas
@@ -88,6 +89,18 @@ function AjustarLimites({ posiciones }: { posiciones: [number, number][] }) {
   return null
 }
 
+/** Leaflet no detecta por si solo que su contenedor cambio de tamaño (p.ej. al pasar a
+ * pantalla completa), asi que hay que avisarle explicitamente o el mapa queda recortado /
+ * mal centrado hasta el siguiente pan o zoom manual. */
+function InvalidarAlCambiarTamano({ activo }: { activo: boolean }) {
+  const map = useMap()
+  useEffect(() => {
+    const id = setTimeout(() => map.invalidateSize(), 250)
+    return () => clearTimeout(id)
+  }, [map, activo])
+  return null
+}
+
 interface Grupo {
   color: string
   etiqueta: string
@@ -120,10 +133,20 @@ export function MapaRuta({
   parkingSpots = [],
   popupMaxHeight = 220,
 }: Props) {
+  const [pantallaCompleta, setPantallaCompleta] = useState(false)
   const posicionesVisitas: [number, number][] = visitas.map((v) => [v.latitude, v.longitude])
   const posicionesTiendas: [number, number][] = tiendasRegion.map((t) => [t.latitude, t.longitude])
   const posicionesParqueo: [number, number][] = parkingSpots.map((p) => [p.latitude, p.longitude])
   const todasLasPosiciones = [...posicionesVisitas, ...posicionesTiendas, ...posicionesParqueo]
+
+  useEffect(() => {
+    if (!pantallaCompleta) return
+    function alPresionarTecla(e: KeyboardEvent) {
+      if (e.key === 'Escape') setPantallaCompleta(false)
+    }
+    document.addEventListener('keydown', alPresionarTecla)
+    return () => document.removeEventListener('keydown', alPresionarTecla)
+  }, [pantallaCompleta])
 
   if (visitas.length === 0 && parkingSpots.length === 0) {
     return (
@@ -168,8 +191,21 @@ export function MapaRuta({
   })
 
   return (
-    <div>
-      <div className={`${alturaClase} w-full overflow-hidden rounded-xl`}>
+    <div className={pantallaCompleta ? 'fixed inset-0 z-[2000] bg-white p-3' : ''}>
+      <div
+        className={`relative w-full overflow-hidden rounded-xl ${
+          pantallaCompleta ? 'h-[calc(100vh-1.5rem)]' : alturaClase
+        }`}
+      >
+        <button
+          type="button"
+          onClick={() => setPantallaCompleta((actual) => !actual)}
+          aria-label={pantallaCompleta ? 'Salir de pantalla completa' : 'Ver mapa en pantalla completa'}
+          title={pantallaCompleta ? 'Salir de pantalla completa' : 'Ver mapa en pantalla completa'}
+          className="absolute right-2.5 top-2.5 z-[1000] flex h-8 w-8 items-center justify-center rounded-lg bg-white text-slate-600 shadow-md hover:text-slate-900"
+        >
+          {pantallaCompleta ? <IconContraer width={16} height={16} /> : <IconExpandir width={16} height={16} />}
+        </button>
         <MapContainer
           center={posicionesVisitas[0] ?? todasLasPosiciones[0]}
           zoom={13}
@@ -183,6 +219,7 @@ export function MapaRuta({
             maxZoom={19}
           />
           <AjustarLimites posiciones={todasLasPosiciones} />
+          <InvalidarAlCambiarTamano activo={pantallaCompleta} />
           {visitasOrdenadas.slice(1).map((visita, i) => (
             <Polyline
               key={visita.id}
