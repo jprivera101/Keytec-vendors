@@ -20,10 +20,25 @@ export async function subirFoto(bucket: BucketFotos, userId: string, archivo: Bl
   return nombre
 }
 
-/** Genera una URL firmada temporal para mostrar una foto privada. */
+// Cachea la URL firmada (no la imagen) por bucket+path. createSignedUrl genera un token nuevo
+// en cada llamada, así que sin este cache cada montada de FotoPrivada pedía una URL distinta
+// para la misma foto y el navegador nunca podía servirla desde su cache HTTP -- terminaba
+// redescargando la imagen completa cada vez que una card se montaba (cada scroll, cada visita
+// a la página), disparando el egress de Supabase muy por encima de lo que el tráfico real
+// justificaba.
+const cacheUrlsFirmadas = new Map<string, { url: string; expiraEn: number }>()
+
+/** Genera (o reutiliza) una URL firmada temporal para mostrar una foto privada. */
 export async function obtenerUrlFirmada(bucket: BucketFotos, path: string, segundos = 3600) {
+  const clave = `${bucket}/${path}`
+  const cacheada = cacheUrlsFirmadas.get(clave)
+  const ahora = Date.now()
+  if (cacheada && cacheada.expiraEn > ahora) return cacheada.url
+
   const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, segundos)
   if (error) throw error
+  // Margen de 60s antes del vencimiento real para no entregar una URL a punto de expirar.
+  cacheUrlsFirmadas.set(clave, { url: data.signedUrl, expiraEn: ahora + (segundos - 60) * 1000 })
   return data.signedUrl
 }
 
