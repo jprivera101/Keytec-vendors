@@ -117,6 +117,10 @@ export function ResumenAdmin() {
 
           {topLugaresQuery.isLoading ? (
             <Spinner texto="Cargando top lugares..." />
+          ) : topLugaresQuery.isError ? (
+            <div className="card p-5 text-sm text-red-600">
+              No se pudieron cargar los top lugares: {(topLugaresQuery.error as Error)?.message ?? 'error desconocido'}.
+            </div>
           ) : (
             <TopLugares lugares={topLugaresQuery.data ?? []} paisesAMostrar={paisesAMostrar} />
           )}

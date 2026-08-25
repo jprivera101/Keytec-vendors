@@ -953,58 +953,27 @@ export async function obtenerComparativoMensual(
 /** Ranking de lugares (places) por total vendido en el mes en curso, a propósito sin filtrar
  * por región/ruta: la idea es ver dónde se vende más sin importar qué ruta lo cubre. Cuando
  * un lugar tiene tiendas de más de una ruta, se reporta la ruta que más vendió ahí. Devuelve
- * la lista completa ordenada (no solo el top 3) para que la vista decida cuántos mostrar. */
+ * la lista completa ordenada (no solo el top 3) para que la vista decida cuántos mostrar.
+ *
+ * Lee de la vista "ventas_lugares_mes" (ver migración 0045) en vez de encadenar .in() del lado
+ * del cliente (semanas -> visitas -> ventas -> tiendas): con miles de visitas/ventas del mes en
+ * producción esa cadena de listas de ids crecía tanto que la consulta fallaba con "Bad Request"
+ * y, como no se distinguía error de "0 lugares", el bloque se veía vacío en ambos países. */
 export async function obtenerTopLugaresDelMes(pais: CountryCode | 'ALL' = 'ALL'): Promise<TopLugarDelMes[]> {
   const ahora = new Date()
   const inicioMesActual = fechaLocalISO(new Date(ahora.getFullYear(), ahora.getMonth(), 1))
   const inicioMesSiguiente = fechaLocalISO(new Date(ahora.getFullYear(), ahora.getMonth() + 1, 1))
 
-  let semanasQuery = supabase
-    .from('weeks')
-    .select('id, profiles!inner(country)')
-    .gte('start_date', inicioMesActual)
-    .lt('start_date', inicioMesSiguiente)
-  if (pais !== 'ALL') semanasQuery = semanasQuery.eq('profiles.country', pais)
-  const { data: semanas, error: semanasError } = await semanasQuery
-  if (semanasError) throw semanasError
-  const weekIds = (semanas ?? []).map((s) => s.id)
-  if (weekIds.length === 0) return []
-
-  const { data: visitas, error: visitasError } = await supabase
-    .from('visits')
-    .select('id, store_id')
-    .in('week_id', weekIds)
-    .not('store_id', 'is', null)
-  if (visitasError) throw visitasError
-
-  const storeIdPorVisitId = new Map<string, string>()
-  for (const v of visitas ?? []) {
-    if (v.store_id) storeIdPorVisitId.set(v.id, v.store_id)
-  }
-  const visitIds = Array.from(storeIdPorVisitId.keys())
-  if (visitIds.length === 0) return []
-
-  const { data: ventas, error: ventasError } = await supabase
-    .from('sales')
-    .select('amount, visit_id')
-    .in('visit_id', visitIds)
+  let query = supabase
+    .from('ventas_lugares_mes')
+    .select('amount, place_id, place_name, route_id, route_name, country')
     .eq('cancelled', false)
-  if (ventasError) throw ventasError
-
-  const totalPorStoreId = new Map<string, number>()
-  for (const venta of ventas ?? []) {
-    const storeId = storeIdPorVisitId.get(venta.visit_id)
-    if (!storeId) continue
-    totalPorStoreId.set(storeId, (totalPorStoreId.get(storeId) ?? 0) + Number(venta.amount))
-  }
-  if (totalPorStoreId.size === 0) return []
-
-  const storeIds = Array.from(totalPorStoreId.keys())
-  const { data: tiendas, error: tiendasError } = await supabase
-    .from('stores')
-    .select('id, place_id, route_id, country, places(name), routes(name)')
-    .in('id', storeIds)
-  if (tiendasError) throw tiendasError
+    .gte('week_start_date', inicioMesActual)
+    .lt('week_start_date', inicioMesSiguiente)
+  if (pais !== 'ALL') query = query.eq('country', pais)
+  const { data: ventas, error } = await query
+  if (error) throw error
+  if (!ventas || ventas.length === 0) return []
 
   interface AcumuladoLugar {
     placeName: string
@@ -1015,28 +984,27 @@ export async function obtenerTopLugaresDelMes(pais: CountryCode | 'ALL' = 'ALL')
   }
   const porLugar = new Map<string, AcumuladoLugar>()
 
-  for (const tienda of (tiendas ?? []) as unknown as {
-    id: string
-    place_id: string
+  for (const venta of ventas as unknown as {
+    amount: number
+    place_id: string | null
+    place_name: string | null
     route_id: string | null
+    route_name: string | null
     country: CountryCode
-    places: { name: string } | null
-    routes: { name: string } | null
   }[]) {
-    const total = totalPorStoreId.get(tienda.id) ?? 0
-    if (total <= 0) continue
-    const acumulado = porLugar.get(tienda.place_id) ?? {
-      placeName: tienda.places?.name ?? 'Lugar sin nombre',
-      country: tienda.country,
+    if (!venta.place_id) continue
+    const acumulado = porLugar.get(venta.place_id) ?? {
+      placeName: venta.place_name ?? 'Lugar sin nombre',
+      country: venta.country,
       total: 0,
       totalPorRuta: new Map(),
     }
-    acumulado.total += total
-    const rutaKey = tienda.route_id ?? '__sin_ruta__'
-    const ruta = acumulado.totalPorRuta.get(rutaKey) ?? { nombre: tienda.routes?.name ?? 'Sin ruta', total: 0 }
-    ruta.total += total
+    acumulado.total += Number(venta.amount)
+    const rutaKey = venta.route_id ?? '__sin_ruta__'
+    const ruta = acumulado.totalPorRuta.get(rutaKey) ?? { nombre: venta.route_name ?? 'Sin ruta', total: 0 }
+    ruta.total += Number(venta.amount)
     acumulado.totalPorRuta.set(rutaKey, ruta)
-    porLugar.set(tienda.place_id, acumulado)
+    porLugar.set(venta.place_id, acumulado)
   }
 
   return Array.from(porLugar, ([placeId, acumulado]) => {
