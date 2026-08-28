@@ -54,5 +54,10 @@ export function FotoPrivada({ bucket, path, className, alt }: Props) {
     return <div className={`${className ?? ''} animate-pulse bg-slate-200`} />
   }
 
-  return <img src={url} alt={alt} className={className} />
+  // loading="lazy": listas como DetalleSemana montan todas las cards de la semana de un jalón
+  // (sin virtualizar), así que sin esto cada foto se descargaba de una vez aunque estuviera
+  // fuera de pantalla y nunca se llegara a ver -- este era, con mucho, el mayor consumidor de
+  // egress de Supabase, más que las re-descargas por URL inestable que ya se arregló en
+  // obtenerUrlFirmada.
+  return <img src={url} alt={alt} className={className} loading="lazy" />
 }
