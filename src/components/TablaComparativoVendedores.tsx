@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { formatMonto } from '../lib/currency'
 import { formatNumero } from '../lib/numeros'
 import type { ComparativoVendedor } from '../lib/types'
@@ -48,7 +49,11 @@ export function TablaComparativoVendedores({
             <tbody className="divide-y divide-slate-100">
               {filas.map((fila) => (
                 <tr key={fila.vendedorId}>
-                  <td className="whitespace-nowrap px-3 py-2.5 font-medium text-slate-900">{fila.nombre}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 font-medium text-slate-900">
+                    <Link to={`/admin/analitica/${fila.vendedorId}`} className="hover:text-brand-700">
+                      {fila.nombre}
+                    </Link>
+                  </td>
                   {mostrarKmActual && (
                     <td className="px-3 py-2.5 text-right text-slate-700">
                       {fila.actual?.kmRecorridos != null ? `${formatNumero(fila.actual.kmRecorridos)} km` : ''}
