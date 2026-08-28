@@ -39,6 +39,14 @@ export function semanasCalendarioDeMes(anio: number, mes: number): Date[] {
   return lunes
 }
 
+/** Fecha LOCAL a partir de un "YYYY-MM-DD" -- evita el mismo corrimiento de día que
+ * fechaLocalISO documenta arriba, esta vez en la dirección contraria (parsear con
+ * `new Date("YYYY-MM-DD")` interpreta la fecha en UTC, no en hora local). */
+export function fechaDesdeISO(valor: string): Date {
+  const [anio, mes, dia] = valor.split('-').map(Number)
+  return new Date(anio, mes - 1, dia)
+}
+
 /** Mes actual en formato "AAAA-MM", para el valor por defecto de un <input type="month">. */
 export function mesISOActual(): string {
   const hoy = new Date()

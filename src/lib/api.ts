@@ -948,28 +948,113 @@ export async function obtenerComparativoMensual(
     .sort((a, b) => a.nombre.localeCompare(b.nombre))
 }
 
+/** Primer y último día con datos disponibles, para acotar el selector de rango personalizado a
+ * fechas donde en verdad puede haber algo que mostrar (no tiene sentido dejar elegir un día
+ * antes de que existiera la primera semana, o uno futuro). */
+export async function obtenerRangoFechasConDatos(
+  pais: CountryCode | 'ALL' = 'ALL',
+): Promise<{ minFecha: string | null; maxFecha: string }> {
+  let query = supabase
+    .from('weeks')
+    .select('start_date, profiles!inner(country)')
+    .order('start_date', { ascending: true })
+    .limit(1)
+  if (pais !== 'ALL') query = query.eq('profiles.country', pais)
+  const { data, error } = await query
+  if (error) throw error
+  return { minFecha: data?.[0]?.start_date ?? null, maxFecha: fechaLocalISO() }
+}
+
+/** Vendedores activos con sus métricas de un rango de fechas arbitrario [desde, hasta] (ambos
+ * inclusive, "YYYY-MM-DD"), para la vista de "Personalizado" del Resumen. A diferencia de
+ * obtenerComparativoMensual no hay "anterior" -- un rango elegido a mano no tiene un período
+ * previo obvio con el que comparar -- así que ese campo siempre viene en null. */
+export async function obtenerResumenPersonalizado(
+  pais: CountryCode | 'ALL',
+  region: string | 'ALL',
+  desde: string,
+  hasta: string,
+): Promise<ComparativoVendedor[]> {
+  const vendedores = (await obtenerVendedores(pais, region)).filter((v) => v.active)
+  if (vendedores.length === 0) return []
+  const vendedorIds = vendedores.map((v) => v.id)
+
+  const hastaFecha = new Date(`${hasta}T00:00:00`)
+  const hastaExclusiva = fechaLocalISO(
+    new Date(hastaFecha.getFullYear(), hastaFecha.getMonth(), hastaFecha.getDate() + 1),
+  )
+
+  const { data: semanasRango, error } = await supabase
+    .from('weeks')
+    .select('id, salesman_id, start_date, start_mileage_km, end_mileage_km')
+    .in('salesman_id', vendedorIds)
+    .gte('start_date', desde)
+    .lt('start_date', hastaExclusiva)
+  if (error) throw error
+
+  const semanas = (semanasRango ?? []) as FilaSemana[]
+  const metricas = await metricasPorSemana(semanas.map((s) => s.id))
+
+  function acumular(delVendedor: FilaSemana[]): MetricasPeriodo | null {
+    if (delVendedor.length === 0) return null
+    let km = 0
+    let huboSemanaFinalizada = false
+    let visitas = 0
+    let ventas = 0
+    for (const semana of delVendedor) {
+      if (semana.end_mileage_km != null) {
+        km += semana.end_mileage_km - semana.start_mileage_km
+        huboSemanaFinalizada = true
+      }
+      const m = metricas.get(semana.id)
+      visitas += m?.visitas ?? 0
+      ventas += m?.ventas ?? 0
+    }
+    return { kmRecorridos: huboSemanaFinalizada ? km : null, totalVisitas: visitas, totalVentas: ventas }
+  }
+
+  return vendedores
+    .map((vendedor) => ({
+      vendedorId: vendedor.id,
+      nombre: vendedor.full_name,
+      country: vendedor.country,
+      actual: acumular(semanas.filter((s) => s.salesman_id === vendedor.id)),
+      anterior: null,
+    }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre))
+}
+
 // Top lugares -------------------------------------------------------------
 
-/** Ranking de lugares (places) por total vendido en el mes en curso, a propósito sin filtrar
- * por región/ruta: la idea es ver dónde se vende más sin importar qué ruta lo cubre. Cuando
- * un lugar tiene tiendas de más de una ruta, se reporta la ruta que más vendió ahí. Devuelve
- * la lista completa ordenada (no solo el top 3) para que la vista decida cuántos mostrar.
+/** Ranking de lugares (places) por total vendido en el mes en curso -- ver obtenerTopLugaresEnRango. */
+export async function obtenerTopLugaresDelMes(pais: CountryCode | 'ALL' = 'ALL'): Promise<TopLugarDelMes[]> {
+  const ahora = new Date()
+  const inicioMesActual = fechaLocalISO(new Date(ahora.getFullYear(), ahora.getMonth(), 1))
+  const inicioMesSiguiente = fechaLocalISO(new Date(ahora.getFullYear(), ahora.getMonth() + 1, 1))
+  return obtenerTopLugaresEnRango(pais, inicioMesActual, inicioMesSiguiente)
+}
+
+/** Ranking de lugares (places) por total vendido en [desde, hastaExclusiva), a propósito sin
+ * filtrar por región/ruta: la idea es ver dónde se vende más sin importar qué ruta lo cubre.
+ * Cuando un lugar tiene tiendas de más de una ruta, se reporta la ruta que más vendió ahí.
+ * Devuelve la lista completa ordenada (no solo el top 3) para que la vista decida cuántos
+ * mostrar.
  *
  * Lee de la vista "ventas_lugares_mes" (ver migración 0045) en vez de encadenar .in() del lado
  * del cliente (semanas -> visitas -> ventas -> tiendas): con miles de visitas/ventas del mes en
  * producción esa cadena de listas de ids crecía tanto que la consulta fallaba con "Bad Request"
  * y, como no se distinguía error de "0 lugares", el bloque se veía vacío en ambos países. */
-export async function obtenerTopLugaresDelMes(pais: CountryCode | 'ALL' = 'ALL'): Promise<TopLugarDelMes[]> {
-  const ahora = new Date()
-  const inicioMesActual = fechaLocalISO(new Date(ahora.getFullYear(), ahora.getMonth(), 1))
-  const inicioMesSiguiente = fechaLocalISO(new Date(ahora.getFullYear(), ahora.getMonth() + 1, 1))
-
+export async function obtenerTopLugaresEnRango(
+  pais: CountryCode | 'ALL',
+  desde: string,
+  hastaExclusiva: string,
+): Promise<TopLugarDelMes[]> {
   let query = supabase
     .from('ventas_lugares_mes')
     .select('amount, place_id, place_name, route_id, route_name, country')
     .eq('cancelled', false)
-    .gte('week_start_date', inicioMesActual)
-    .lt('week_start_date', inicioMesSiguiente)
+    .gte('week_start_date', desde)
+    .lt('week_start_date', hastaExclusiva)
   if (pais !== 'ALL') query = query.eq('country', pais)
   const { data: ventas, error } = await query
   if (error) throw error

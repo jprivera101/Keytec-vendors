@@ -6,8 +6,12 @@ import {
   obtenerComparativoSemanal,
   obtenerComparativoMensual,
   obtenerTopLugaresDelMes,
+  obtenerTopLugaresEnRango,
+  obtenerResumenPersonalizado,
+  obtenerRangoFechasConDatos,
 } from '../../lib/api'
 import { formatMonto } from '../../lib/currency'
+import { fechaLocalISO, fechaDesdeISO } from '../../lib/fechas'
 import { Spinner } from '../../components/Spinner'
 import { PageHeader } from '../../components/PageHeader'
 import { TablaComparativoVendedores } from '../../components/TablaComparativoVendedores'
@@ -18,11 +22,14 @@ import type { CountryCode, TopLugarDelMes } from '../../lib/types'
 
 const acentos = ['bg-brand-700', 'bg-ink-700', 'bg-[#0092D2]']
 
-type Vista = 'semana' | 'mes'
+type Vista = 'semana' | 'mes' | 'personalizado'
+const DIAS_RANGO_POR_DEFECTO = 6 // últimos 7 días (hoy - 6) al abrir "Personalizado" por primera vez.
 
 export function ResumenAdmin() {
   const { pais, region } = useOutletContext<AdminOutletContext>()
   const [vista, setVista] = useState<Vista>('semana')
+  const [rangoElegido, setRangoElegido] = useState<{ desde: string; hasta: string } | null>(null)
+
   const resumenQuery = useQuery({
     queryKey: ['resumen-admin', pais, region],
     queryFn: () => obtenerResumenAdmin(pais, region),
@@ -43,6 +50,37 @@ export function ResumenAdmin() {
     queryKey: ['top-lugares-mes', pais],
     queryFn: () => obtenerTopLugaresDelMes(pais),
     enabled: vista === 'mes',
+  })
+
+  // Acota el selector de "Personalizado" a fechas donde en verdad hay datos: antes de la
+  // primera semana registrada no tiene sentido dejar elegir, y no se puede ir al futuro.
+  const rangoDisponibleQuery = useQuery({
+    queryKey: ['rango-fechas-disponibles', pais],
+    queryFn: () => obtenerRangoFechasConDatos(pais),
+    enabled: vista === 'personalizado',
+  })
+  const rangoDisponible = rangoDisponibleQuery.data
+  const hastaMax = rangoDisponible?.maxFecha ?? fechaLocalISO()
+  const hastaMaxFecha = fechaDesdeISO(hastaMax)
+  const hace7dias = fechaLocalISO(
+    new Date(hastaMaxFecha.getFullYear(), hastaMaxFecha.getMonth(), hastaMaxFecha.getDate() - DIAS_RANGO_POR_DEFECTO),
+  )
+  const desdeMin = rangoDisponible?.minFecha ?? hace7dias
+  const desdePorDefecto = desdeMin > hace7dias ? desdeMin : hace7dias
+  const desde = rangoElegido?.desde ?? desdePorDefecto
+  const hasta = rangoElegido?.hasta ?? hastaMax
+  const hastaFecha = fechaDesdeISO(hasta)
+  const hastaExclusiva = fechaLocalISO(new Date(hastaFecha.getFullYear(), hastaFecha.getMonth(), hastaFecha.getDate() + 1))
+
+  const resumenPersonalizadoQuery = useQuery({
+    queryKey: ['resumen-personalizado', pais, region, desde, hasta],
+    queryFn: () => obtenerResumenPersonalizado(pais, region, desde, hasta),
+    enabled: vista === 'personalizado' && !!rangoDisponible,
+  })
+  const topLugaresRangoQuery = useQuery({
+    queryKey: ['top-lugares-rango', pais, desde, hastaExclusiva],
+    queryFn: () => obtenerTopLugaresEnRango(pais, desde, hastaExclusiva),
+    enabled: vista === 'personalizado' && !!rangoDisponible,
   })
 
   if (resumenQuery.isLoading) return <Spinner texto="Cargando resumen..." />
@@ -69,6 +107,21 @@ export function ResumenAdmin() {
     .map((v) => ({ nombre: v.nombre, total: v.actual!.totalVentas, country: v.country }))
     .sort((a, b) => b.total - a.total)
 
+  // Mismo cálculo que arriba, pero para el rango de fechas elegido a mano en "Personalizado".
+  const datosRango = resumenPersonalizadoQuery.data ?? []
+  const vendedoresConActividadRango = datosRango.filter((v) => v.actual !== null).length
+  const visitasRango = datosRango.reduce((suma, v) => suma + (v.actual?.totalVisitas ?? 0), 0)
+  const ventasRangoPorPais: Partial<Record<CountryCode, number>> = {}
+  for (const v of datosRango) {
+    if (v.actual && v.country) {
+      ventasRangoPorPais[v.country] = (ventasRangoPorPais[v.country] ?? 0) + v.actual.totalVentas
+    }
+  }
+  const ventasPorVendedorRango = datosRango
+    .filter((v) => v.actual && v.actual.totalVentas > 0)
+    .map((v) => ({ nombre: v.nombre, total: v.actual!.totalVentas, country: v.country }))
+    .sort((a, b) => b.total - a.total)
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -78,25 +131,58 @@ export function ResumenAdmin() {
         subtitle="Estado de las rutas activas ahora mismo."
       />
 
-      <div className="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1">
-        <button
-          type="button"
-          onClick={() => setVista('semana')}
-          className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
-            vista === 'semana' ? 'bg-white text-ink-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          Semana activa
-        </button>
-        <button
-          type="button"
-          onClick={() => setVista('mes')}
-          className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
-            vista === 'mes' ? 'bg-white text-ink-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          Mes actual
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1">
+          <button
+            type="button"
+            onClick={() => setVista('semana')}
+            className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
+              vista === 'semana' ? 'bg-white text-ink-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            Semana activa
+          </button>
+          <button
+            type="button"
+            onClick={() => setVista('mes')}
+            className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
+              vista === 'mes' ? 'bg-white text-ink-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            Mes actual
+          </button>
+          <button
+            type="button"
+            onClick={() => setVista('personalizado')}
+            className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
+              vista === 'personalizado' ? 'bg-white text-ink-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            Personalizado
+          </button>
+        </div>
+
+        {vista === 'personalizado' && (
+          <div className="flex items-center gap-2 text-sm">
+            <input
+              type="date"
+              value={desde}
+              min={rangoDisponible?.minFecha ?? undefined}
+              max={hasta}
+              onChange={(e) => setRangoElegido({ desde: e.target.value, hasta })}
+              className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-slate-700"
+            />
+            <span className="text-slate-400">–</span>
+            <input
+              type="date"
+              value={hasta}
+              min={desde}
+              max={hastaMax}
+              onChange={(e) => setRangoElegido({ desde, hasta: e.target.value })}
+              className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-slate-700"
+            />
+          </div>
+        )}
       </div>
 
       {vista === 'mes' ? (
@@ -136,6 +222,43 @@ export function ResumenAdmin() {
             />
           )}
         </>
+      ) : vista === 'personalizado' ? (
+        rangoDisponibleQuery.isLoading ? (
+          <Spinner texto="Cargando rango disponible..." />
+        ) : rangoDisponible?.minFecha == null ? (
+          <p className="card p-5 text-sm text-slate-400">Todavía no hay datos registrados.</p>
+        ) : (
+          <>
+            <TarjetasResumen
+              vendedoresActivos={resumen.vendedoresActivos}
+              etiquetaSegunda="Vendedores con ruta en el rango"
+              valorSegunda={String(vendedoresConActividadRango)}
+              etiquetaVisitas="Visitas en el rango"
+              totalVisitas={visitasRango}
+              etiquetaVentas="Ventas en el rango"
+              ventasPorPais={ventasRangoPorPais}
+              paisesAMostrar={paisesAMostrar}
+              tituloVentasPorVendedor="Ventas por vendedor (rango elegido)"
+              ventasPorVendedor={ventasPorVendedorRango}
+              sinVentasTexto="Nadie registró ventas en el rango elegido."
+            />
+
+            {topLugaresRangoQuery.isLoading ? (
+              <Spinner texto="Cargando top lugares..." />
+            ) : topLugaresRangoQuery.isError ? (
+              <div className="card p-5 text-sm text-red-600">
+                No se pudieron cargar los top lugares:{' '}
+                {(topLugaresRangoQuery.error as Error)?.message ?? 'error desconocido'}.
+              </div>
+            ) : (
+              <TopLugares
+                lugares={topLugaresRangoQuery.data ?? []}
+                paisesAMostrar={paisesAMostrar}
+                titulo="Top 3 lugares (rango elegido)"
+              />
+            )}
+          </>
+        )
       ) : (
         <>
           <TarjetasResumen
@@ -272,13 +395,15 @@ const TOP_N = 3
 function TopLugares({
   lugares,
   paisesAMostrar,
+  titulo = 'Top 3 lugares (mes actual)',
 }: {
   lugares: TopLugarDelMes[]
   paisesAMostrar: CountryCode[]
+  titulo?: string
 }) {
   return (
     <div className="card p-5">
-      <h2 className="mb-4 text-sm font-semibold text-slate-500">Top 3 lugares (mes actual)</h2>
+      <h2 className="mb-4 text-sm font-semibold text-slate-500">{titulo}</h2>
       <div className={paisesAMostrar.length > 1 ? 'space-y-5' : ''}>
         {paisesAMostrar.map((c) => {
           const top = lugares.filter((l) => l.country === c).slice(0, TOP_N)
