@@ -11,6 +11,8 @@ import { PageHeader } from '../../components/PageHeader'
 import { IconAnalitica, IconChevron } from '../../components/icons'
 import { DetalleSemana } from '../shared/DetalleSemana'
 import { MapaMultiVendedor } from './MapaMultiVendedor'
+import { GenerarReporteModal } from './GenerarReporteModal'
+import { IconReporte } from '../../components/icons'
 import { NOMBRE_PAIS, type AdminOutletContext } from './AdminLayout'
 import type { CountryCode } from '../../lib/types'
 
@@ -31,6 +33,7 @@ export function AnaliticaAdmin() {
   const [anioFiltro, setAnioFiltro] = useState<number | 'ALL'>('ALL')
   const [mesFiltro, setMesFiltro] = useState<number | 'ALL'>('ALL')
   const [filtrosAbiertos, setFiltrosAbiertos] = useState(false)
+  const [reporteAbierto, setReporteAbierto] = useState(false)
 
   // Vista "todas las regiones" sin vendedor elegido: mapa comparativo de varios vendedores
   // a la vez. Usa semana calendario (lunes-domingo), no la semana propia de cada vendedor
@@ -189,6 +192,20 @@ export function AnaliticaAdmin() {
                 onSeleccionar={(id) => navigate(`/admin/analitica/${id}`)}
                 etiquetaPais={pais === 'ALL' ? (v) => (v.country ? NOMBRE_PAIS[v.country] : null) : undefined}
               />
+            </div>
+          )}
+
+          {salesmanId && vendedorSeleccionado && (
+            <div className="flex items-end justify-end">
+              <button
+                type="button"
+                onClick={() => setReporteAbierto(true)}
+                title="Generar reporte"
+                className="btn-secondary flex items-center gap-1.5 px-4 py-2"
+              >
+                <IconReporte width={16} height={16} />
+                Reporte
+              </button>
             </div>
           )}
         </div>
@@ -353,6 +370,16 @@ export function AnaliticaAdmin() {
         />
       ) : (
         <Spinner />
+      )}
+
+      {salesmanId && vendedorSeleccionado && (
+        <GenerarReporteModal
+          vendedorId={salesmanId}
+          vendedorNombre={vendedorSeleccionado.full_name}
+          semanas={semanasQuery.data ?? []}
+          abierto={reporteAbierto}
+          onCerrar={() => setReporteAbierto(false)}
+        />
       )}
     </div>
   )

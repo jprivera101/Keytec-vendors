@@ -131,6 +131,16 @@ export function IconDepositos(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+export function IconReporte(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Base {...props}>
+      <path d="M7 3.5h7l3 3V20a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1z" />
+      <path d="M14 3.5V7h3" />
+      <path d="M12 11v5.5M9.7 14.2 12 16.5l2.3-2.3" />
+    </Base>
+  )
+}
+
 export function IconVentaCancelada(props: SVGProps<SVGSVGElement>) {
   return (
     <Base {...props}>

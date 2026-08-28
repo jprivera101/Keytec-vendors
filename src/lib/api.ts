@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient'
-import { fechaLocalISO } from './fechas'
+import { fechaLocalISO, fechaDesdeISO } from './fechas'
 import type {
   ComparativoVendedor,
   CountryCode,
@@ -9,11 +9,14 @@ import type {
   MetricasPeriodo,
   ParkingSpot,
   Profile,
+  ReporteVendedor,
   ResumenAdmin,
+  RutaReporte,
   Sale,
   TopLugarDelMes,
   VentaCancelada,
   VentaEnvio,
+  VentaReporte,
   Visit,
   VisitWithSales,
   VendedorConRegion,
@@ -1102,4 +1105,99 @@ export async function obtenerTopLugaresEnRango(
       routeName: rutaPrincipal?.nombre ?? null,
     }
   }).sort((a, b) => b.total - a.total)
+}
+
+// Reporte de vendedor ------------------------------------------------------
+
+/** Reporte de un vendedor en [desde, hasta] (ambos "YYYY-MM-DD", inclusive), para exportar a
+ * PDF desde Analítica. Incluye toda semana (ruta) que se traslape con el rango, aunque haya
+ * empezado antes -- `comenzoAntesDelRango` es la bandera para que la vista ponga el
+ * disclaimer -- pero visitas y ventas contadas ahí son solo las de los días dentro del rango,
+ * nunca las de la semana completa. Ventas canceladas se listan aparte y nunca entran al total. */
+export async function obtenerReporteVendedor(
+  vendedorId: string,
+  desde: string,
+  hasta: string,
+): Promise<ReporteVendedor> {
+  const { data: vendedor, error: vendedorError } = await supabase
+    .from('profiles')
+    .select('full_name, country')
+    .eq('id', vendedorId)
+    .single()
+  if (vendedorError) throw vendedorError
+
+  const desdeFecha = fechaDesdeISO(desde)
+  const hastaFecha = fechaDesdeISO(hasta)
+  const hastaExclusivaFecha = new Date(hastaFecha.getFullYear(), hastaFecha.getMonth(), hastaFecha.getDate() + 1)
+  const hastaExclusivaISO = fechaLocalISO(hastaExclusivaFecha)
+
+  // Semanas que se traslapan con el rango: empezaron antes de que termine, y no terminaron
+  // antes de que empiece (o siguen activas, end_date null).
+  const { data: semanas, error: semanasError } = await supabase
+    .from('weeks')
+    .select('id, start_date, end_date')
+    .eq('salesman_id', vendedorId)
+    .lt('start_date', hastaExclusivaISO)
+    .or(`end_date.is.null,end_date.gte.${desde}`)
+    .order('start_date', { ascending: true })
+  if (semanasError) throw semanasError
+
+  const rutas: RutaReporte[] = []
+
+  for (const semana of semanas ?? []) {
+    const { data: visitas, error: visitasError } = await supabase
+      .from('visits')
+      .select('id, store_name')
+      .eq('week_id', semana.id)
+      .gte('captured_at', desdeFecha.toISOString())
+      .lt('captured_at', hastaExclusivaFecha.toISOString())
+    if (visitasError) throw visitasError
+
+    const nombrePorVisita = new Map((visitas ?? []).map((v) => [v.id, v.store_name || 'Tienda sin nombre']))
+    const visitIds = Array.from(nombrePorVisita.keys())
+
+    const ventasDetalle: VentaReporte[] = []
+    const ventasCanceladas: VentaReporte[] = []
+
+    if (visitIds.length > 0) {
+      const { data: ventas, error: ventasError } = await supabase
+        .from('sales')
+        .select('amount, created_at, visit_id, cancelled')
+        .in('visit_id', visitIds)
+      if (ventasError) throw ventasError
+
+      for (const venta of ventas ?? []) {
+        const fila: VentaReporte = {
+          tienda: nombrePorVisita.get(venta.visit_id) ?? 'Tienda sin nombre',
+          fecha: fechaLocalISO(venta.created_at),
+          monto: Number(venta.amount),
+        }
+        if (venta.cancelled) ventasCanceladas.push(fila)
+        else ventasDetalle.push(fila)
+      }
+      ventasDetalle.sort((a, b) => a.fecha.localeCompare(b.fecha))
+      ventasCanceladas.sort((a, b) => a.fecha.localeCompare(b.fecha))
+    }
+
+    rutas.push({
+      semanaId: semana.id,
+      fechaInicioReal: semana.start_date,
+      fechaFinReal: semana.end_date,
+      comenzoAntesDelRango: semana.start_date < desde,
+      visitas: visitIds.length,
+      ventas: ventasDetalle.length,
+      totalVendido: ventasDetalle.reduce((suma, v) => suma + v.monto, 0),
+      ventasDetalle,
+      ventasCanceladas,
+    })
+  }
+
+  return {
+    vendedorNombre: vendedor.full_name,
+    country: vendedor.country,
+    desde,
+    hasta,
+    totalRutas: rutas.length,
+    rutas,
+  }
 }

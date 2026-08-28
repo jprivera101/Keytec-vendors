@@ -172,6 +172,38 @@ export interface TopLugarDelMes {
   routeName: string | null
 }
 
+/** Una venta (o venta cancelada) dentro del reporte de un vendedor -- solo lo que pidió el
+ * reporte, nada más: tienda, fecha, monto. */
+export interface VentaReporte {
+  tienda: string
+  fecha: string
+  monto: number
+}
+
+/** Una semana (ruta) que se traslapa con el rango del reporte. Si la semana empezó antes del
+ * rango elegido, `comenzoAntesDelRango` avisa para poner el disclaimer -- visitas/ventas solo
+ * cuentan los días dentro del rango, nunca la semana completa. */
+export interface RutaReporte {
+  semanaId: string
+  fechaInicioReal: string
+  fechaFinReal: string | null
+  comenzoAntesDelRango: boolean
+  visitas: number
+  ventas: number
+  totalVendido: number
+  ventasDetalle: VentaReporte[]
+  ventasCanceladas: VentaReporte[]
+}
+
+export interface ReporteVendedor {
+  vendedorNombre: string
+  country: CountryCode | null
+  desde: string
+  hasta: string
+  totalRutas: number
+  rutas: RutaReporte[]
+}
+
 export interface ResumenAdmin {
   vendedoresActivos: number
   rutasActivas: number
