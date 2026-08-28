@@ -46,7 +46,7 @@ export function GenerarReporteModal({
         obtenerReporteVendedor(vendedorId, desde, hasta),
         import('../../lib/reportePdf'),
       ])
-      generarReportePdf(reporte)
+      await generarReportePdf(reporte)
       onCerrar()
     } catch (e) {
       setError((e as Error).message)
