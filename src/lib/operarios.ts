@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { fechaLocalISO, fechaDesdeISO } from './fechas'
 import type { CountryCode, Profile, WeekStatus } from './types'
 
 export interface OperarioConAsignados extends Profile {
@@ -104,6 +105,8 @@ export interface VentaOperario {
   photoPath: string | null
   createdAt: string
   processed: boolean
+  /** Cuándo se marcó como procesada (null si sigue pendiente). */
+  processedAt: string | null
   storeId: string | null
   storeName: string | null
   /** Nombre del cliente/dueño de la tienda (null en ventas por envío, que no tienen tienda). */
@@ -121,6 +124,7 @@ interface FilaVentaOperario {
   photo_path: string | null
   created_at: string
   processed: boolean
+  processed_at: string | null
   visits: {
     store_id: string | null
     store_name: string | null
@@ -140,6 +144,7 @@ interface FilaEnvioOperario {
   photo_path: string | null
   created_at: string
   processed: boolean
+  processed_at: string | null
   client_name: string
   weeks: {
     id: string
@@ -161,21 +166,66 @@ interface FilaEnvioOperario {
  * `soloPendientes` evita traer el historial completo de ventas ya procesadas cuando el
  * operario mira "Anteriores"/"Todas" -- ahí solo le interesa lo que todavía le falta
  * procesar, no volver a bajar meses de ventas ya cerradas cada vez que abre el panel. */
+const SELECT_VENTA =
+  'id, amount, photo_path, created_at, processed, processed_at, visits(store_id, store_name, stores(client_name), weeks(id, status, salesman_id, profiles(full_name, country)))'
+const SELECT_ENVIO =
+  'id, amount, photo_path, created_at, processed, processed_at, client_name, weeks(id, status, salesman_id, profiles(full_name, country))'
+
+function filaVentaAVentaOperario(fila: FilaVentaOperario): VentaOperario | null {
+  const semana = fila.visits?.weeks
+  if (!semana) return null
+  return {
+    id: fila.id,
+    origen: 'venta',
+    amount: Number(fila.amount),
+    photoPath: fila.photo_path,
+    createdAt: fila.created_at,
+    processed: fila.processed,
+    processedAt: fila.processed_at,
+    storeId: fila.visits?.store_id ?? null,
+    storeName: fila.visits?.store_name ?? null,
+    clientName: fila.visits?.stores?.client_name ?? null,
+    salesmanId: semana.salesman_id,
+    salesmanName: semana.profiles?.full_name ?? 'Vendedor',
+    country: semana.profiles?.country ?? null,
+    weekId: semana.id,
+    weekStatus: semana.status,
+  }
+}
+
+function filaEnvioAVentaOperario(fila: FilaEnvioOperario): VentaOperario | null {
+  const semana = fila.weeks
+  if (!semana) return null
+  return {
+    id: fila.id,
+    origen: 'envio',
+    amount: Number(fila.amount),
+    photoPath: fila.photo_path,
+    createdAt: fila.created_at,
+    processed: fila.processed,
+    processedAt: fila.processed_at,
+    storeId: null,
+    storeName: `📦 ${fila.client_name}`,
+    clientName: null,
+    salesmanId: semana.salesman_id,
+    salesmanName: semana.profiles?.full_name ?? 'Vendedor',
+    country: semana.profiles?.country ?? null,
+    weekId: semana.id,
+    weekStatus: semana.status,
+  }
+}
+
 export async function obtenerVentasOperario(soloPendientes = false): Promise<VentaOperario[]> {
   // Una venta cancelada no tiene nada que procesar: se excluye siempre, no solo en el filtro
   // de pendientes.
   let ventasQuery = supabase
     .from('sales')
-    .select(
-      'id, amount, photo_path, created_at, processed, visits(store_id, store_name, stores(client_name), weeks(id, status, salesman_id, profiles(full_name, country)))',
-    )
+    .select(SELECT_VENTA)
     .eq('cancelled', false)
     .order('created_at', { ascending: false })
   let enviosQuery = supabase
     .from('shipment_sales')
-    .select(
-      'id, amount, photo_path, created_at, processed, client_name, weeks(id, status, salesman_id, profiles(full_name, country))',
-    )
+    .select(SELECT_ENVIO)
     .eq('cancelled', false)
     .order('created_at', { ascending: false })
 
@@ -188,51 +238,72 @@ export async function obtenerVentasOperario(soloPendientes = false): Promise<Ven
   if (ventasRes.error) throw ventasRes.error
   if (enviosRes.error) throw enviosRes.error
 
-  const ventas: VentaOperario[] = ((ventasRes.data ?? []) as unknown as FilaVentaOperario[]).flatMap((fila) => {
-    const semana = fila.visits?.weeks
-    if (!semana) return []
-    return [
-      {
-        id: fila.id,
-        origen: 'venta' as const,
-        amount: Number(fila.amount),
-        photoPath: fila.photo_path,
-        createdAt: fila.created_at,
-        processed: fila.processed,
-        storeId: fila.visits?.store_id ?? null,
-        storeName: fila.visits?.store_name ?? null,
-        clientName: fila.visits?.stores?.client_name ?? null,
-        salesmanId: semana.salesman_id,
-        salesmanName: semana.profiles?.full_name ?? 'Vendedor',
-        country: semana.profiles?.country ?? null,
-        weekId: semana.id,
-        weekStatus: semana.status,
-      },
-    ]
-  })
+  const ventas = ((ventasRes.data ?? []) as unknown as FilaVentaOperario[])
+    .map(filaVentaAVentaOperario)
+    .filter((v): v is VentaOperario => v !== null)
+  const envios = ((enviosRes.data ?? []) as unknown as FilaEnvioOperario[])
+    .map(filaEnvioAVentaOperario)
+    .filter((v): v is VentaOperario => v !== null)
 
-  const envios: VentaOperario[] = ((enviosRes.data ?? []) as unknown as FilaEnvioOperario[]).flatMap((fila) => {
-    const semana = fila.weeks
-    if (!semana) return []
-    return [
-      {
-        id: fila.id,
-        origen: 'envio' as const,
-        amount: Number(fila.amount),
-        photoPath: fila.photo_path,
-        createdAt: fila.created_at,
-        processed: fila.processed,
-        storeId: null,
-        storeName: `📦 ${fila.client_name}`,
-        clientName: null,
-        salesmanId: semana.salesman_id,
-        salesmanName: semana.profiles?.full_name ?? 'Vendedor',
-        country: semana.profiles?.country ?? null,
-        weekId: semana.id,
-        weekStatus: semana.status,
-      },
-    ]
-  })
+  return [...ventas, ...envios].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  )
+}
+
+/** Cuántos días le quedan a la foto de una venta antes de que el job de retención (ver
+ * retention-cleanup, migración 0039) la borre por completo -- las fotos se comprimen a los 14
+ * días (siguen viéndose, solo más chicas) pero se ELIMINAN del todo a los 2 meses. */
+const DIAS_ANTES_DE_BORRAR_FOTO = 60
+/** Margen de seguridad: el job corre una vez al día, así que el límite exacto de "2 meses" es
+ * frágil -- unos días antes evita ofrecer una fecha cuya foto ya se borró (o está por borrarse
+ * el mismo día que se genera el reporte). */
+const MARGEN_SEGURIDAD_DIAS = 5
+
+/** Rango de fechas seguro para "Revisión de operaciones": nunca antes de cuando la foto más
+ * vieja todavía disponible se subió, nunca después de hoy. */
+export function obtenerRangoSeguroParaFotos(): { minFecha: string; maxFecha: string } {
+  const hoy = new Date()
+  const minFecha = fechaLocalISO(
+    new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - DIAS_ANTES_DE_BORRAR_FOTO + MARGEN_SEGURIDAD_DIAS),
+  )
+  return { minFecha, maxFecha: fechaLocalISO(hoy) }
+}
+
+/** Ventas (procesadas o pendientes, nunca canceladas) en [desde, hasta] -- para "Revisión de
+ * operaciones". A diferencia de obtenerVentasOperario, siempre trae ambos estados: el punto es
+ * repasar el historial completo de lo ya operado, no solo lo que falta. El rango se acota del
+ * lado del cliente a obtenerRangoSeguroParaFotos para no ofrecer fechas cuya foto el job de
+ * retención ya haya borrado. */
+export async function obtenerVentasOperarioEnRango(desde: string, hasta: string): Promise<VentaOperario[]> {
+  const desdeFecha = fechaDesdeISO(desde)
+  const hastaFecha = fechaDesdeISO(hasta)
+  const hastaExclusiva = new Date(hastaFecha.getFullYear(), hastaFecha.getMonth(), hastaFecha.getDate() + 1)
+
+  const [ventasRes, enviosRes] = await Promise.all([
+    supabase
+      .from('sales')
+      .select(SELECT_VENTA)
+      .eq('cancelled', false)
+      .gte('created_at', desdeFecha.toISOString())
+      .lt('created_at', hastaExclusiva.toISOString())
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('shipment_sales')
+      .select(SELECT_ENVIO)
+      .eq('cancelled', false)
+      .gte('created_at', desdeFecha.toISOString())
+      .lt('created_at', hastaExclusiva.toISOString())
+      .order('created_at', { ascending: false }),
+  ])
+  if (ventasRes.error) throw ventasRes.error
+  if (enviosRes.error) throw enviosRes.error
+
+  const ventas = ((ventasRes.data ?? []) as unknown as FilaVentaOperario[])
+    .map(filaVentaAVentaOperario)
+    .filter((v): v is VentaOperario => v !== null)
+  const envios = ((enviosRes.data ?? []) as unknown as FilaEnvioOperario[])
+    .map(filaEnvioAVentaOperario)
+    .filter((v): v is VentaOperario => v !== null)
 
   return [...ventas, ...envios].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),

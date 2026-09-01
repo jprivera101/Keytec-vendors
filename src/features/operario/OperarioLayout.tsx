@@ -2,10 +2,11 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../lib/useAuth'
 import { Logo } from '../../components/Logo'
 import { PoweredByPenthouse } from '../../components/PoweredByPenthouse'
-import { IconDepositos, IconProcesar } from '../../components/icons'
+import { IconDepositos, IconProcesar, IconHistorial } from '../../components/icons'
 
 const ENLACES = [
   { to: '/operario', etiqueta: 'Ventas por procesar', fin: true, Icono: IconProcesar },
+  { to: '/operario/revision', etiqueta: 'Revisión de operaciones', fin: false, Icono: IconHistorial },
   { to: '/operario/depositos', etiqueta: 'Depósitos', fin: false, Icono: IconDepositos },
 ]
 

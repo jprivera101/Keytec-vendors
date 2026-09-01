@@ -1175,9 +1175,31 @@ export async function obtenerReporteVendedor(
         if (venta.cancelled) ventasCanceladas.push(fila)
         else ventasDetalle.push(fila)
       }
-      ventasDetalle.sort((a, b) => a.fecha.localeCompare(b.fecha))
-      ventasCanceladas.sort((a, b) => a.fecha.localeCompare(b.fecha))
     }
+
+    // Ventas por envío: no cuelgan de una visita (van directo a la semana), pero sí cuentan
+    // para "Total vendido" en el resto de la app (ver DetalleSemana) -- sin esto el reporte
+    // se quedaba corto contra el dashboard cada vez que un vendedor tenía alguna.
+    const { data: ventasEnvio, error: ventasEnvioError } = await supabase
+      .from('shipment_sales')
+      .select('amount, created_at, client_name, cancelled')
+      .eq('week_id', semana.id)
+      .gte('created_at', desdeFecha.toISOString())
+      .lt('created_at', hastaExclusivaFecha.toISOString())
+    if (ventasEnvioError) throw ventasEnvioError
+
+    for (const venta of ventasEnvio ?? []) {
+      const fila: VentaReporte = {
+        tienda: `Envío – ${venta.client_name}`,
+        fecha: fechaLocalISO(venta.created_at),
+        monto: Number(venta.amount),
+      }
+      if (venta.cancelled) ventasCanceladas.push(fila)
+      else ventasDetalle.push(fila)
+    }
+
+    ventasDetalle.sort((a, b) => a.fecha.localeCompare(b.fecha))
+    ventasCanceladas.sort((a, b) => a.fecha.localeCompare(b.fecha))
 
     rutas.push({
       semanaId: semana.id,

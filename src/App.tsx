@@ -17,6 +17,7 @@ import { DepositosAdmin } from './features/admin/DepositosAdmin'
 import { VentasCanceladasAdmin } from './features/admin/VentasCanceladasAdmin'
 import { OperarioLayout } from './features/operario/OperarioLayout'
 import { PanelOperario } from './features/operario/PanelOperario'
+import { RevisionOperaciones } from './features/operario/RevisionOperaciones'
 import { DepositosOperario } from './features/operario/DepositosOperario'
 
 function InicioRedirect() {
@@ -71,6 +72,7 @@ export default function App() {
         }
       >
         <Route index element={<PanelOperario />} />
+        <Route path="revision" element={<RevisionOperaciones />} />
         <Route path="depositos" element={<DepositosOperario />} />
       </Route>
 
