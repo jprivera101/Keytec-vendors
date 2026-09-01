@@ -1223,3 +1223,12 @@ export async function obtenerReporteVendedor(
     rutas,
   }
 }
+
+/** El reporte de cada vendedor en [desde, hasta], para el reporte consolidado de Reportería. */
+export async function obtenerReportesDeVendedores(
+  vendedorIds: string[],
+  desde: string,
+  hasta: string,
+): Promise<ReporteVendedor[]> {
+  return Promise.all(vendedorIds.map((id) => obtenerReporteVendedor(id, desde, hasta)))
+}

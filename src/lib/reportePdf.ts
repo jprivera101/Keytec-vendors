@@ -17,6 +17,7 @@ const CANCELADA_FONDO: [number, number, number] = [254, 242, 242] // red-50
 
 const MARGEN = 14
 const ALTO_MAXIMO = 280 // A4 (297mm) menos margen inferior, para decidir el salto de página
+const ALTO_ENCABEZADO = 30
 
 function formatearFecha(iso: string): string {
   const [anio, mes, dia] = iso.split('-')
@@ -87,6 +88,18 @@ function dibujarTarjeta(
   doc.text(valor, x + 4, y + (destacar ? 15.5 : 14), { maxWidth: ancho - 8 })
 }
 
+/** Fila de tarjetas de resumen (Período/Rutas/Visitas/Total, o la variante de portada del
+ * consolidado). Repartidas a partes iguales sobre el ancho de contenido. */
+function dibujarFilaDeTarjetas(doc: jsPDF, y: number, anchoContenido: number, tarjetas: [string, string, boolean?][]): number {
+  const espacioEntreTarjetas = 4
+  const anchoTarjeta = (anchoContenido - espacioEntreTarjetas * (tarjetas.length - 1)) / tarjetas.length
+  const altoTarjeta = 19
+  tarjetas.forEach(([etiqueta, valor, destacar], i) => {
+    dibujarTarjeta(doc, MARGEN + i * (anchoTarjeta + espacioEntreTarjetas), y, anchoTarjeta, altoTarjeta, etiqueta, valor, destacar)
+  })
+  return y + altoTarjeta + 10
+}
+
 function dibujarTablaVentas(
   doc: jsPDF,
   y: number,
@@ -138,6 +151,143 @@ function dibujarPie(doc: jsPDF) {
   }
 }
 
+/** Encabezado con marca (banda morada + logo + franja amarilla) compartido por el reporte
+ * individual y el consolidado -- lo único que cambia entre ambos es el título/subtítulo. */
+function dibujarEncabezadoMarca(
+  doc: jsPDF,
+  logo: { dataUrl: string; ancho: number; alto: number } | null,
+  titulo: string,
+  subtitulo: string,
+): number {
+  const anchoPagina = doc.internal.pageSize.getWidth()
+  doc.setFillColor(...INK)
+  doc.rect(0, 0, anchoPagina, ALTO_ENCABEZADO, 'F')
+  doc.setFillColor(...HIGHLIGHT)
+  doc.rect(0, ALTO_ENCABEZADO, anchoPagina, 1.5, 'F')
+
+  let xTitulo = MARGEN
+  if (logo) {
+    const altoLogo = 13
+    const anchoLogo = altoLogo * (logo.ancho / logo.alto)
+    const yLogo = (ALTO_ENCABEZADO - altoLogo - 6) / 2
+    doc.setFillColor(255, 255, 255)
+    doc.roundedRect(MARGEN, yLogo, anchoLogo + 6, altoLogo + 6, 1.5, 1.5, 'F')
+    doc.addImage(logo.dataUrl, 'PNG', MARGEN + 3, yLogo + 3, anchoLogo, altoLogo)
+    xTitulo = MARGEN + anchoLogo + 12
+  }
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(16)
+  doc.setTextColor(255, 255, 255)
+  doc.text(titulo, xTitulo, ALTO_ENCABEZADO / 2 - 1)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(10)
+  doc.setTextColor(226, 232, 240)
+  doc.text(subtitulo, xTitulo, ALTO_ENCABEZADO / 2 + 6)
+
+  return ALTO_ENCABEZADO + 12
+}
+
+/** Una sección por ruta (semana) que se traslape con el rango del reporte: barra con la fecha
+ * de inicio real (+ "ACTIVA" si sigue en curso), disclaimer si empezó antes del rango, línea
+ * de estadísticas, tabla de ventas y, si las hay, tabla de canceladas aparte. Compartida por el
+ * reporte individual y cada bloque de vendedor dentro del consolidado. */
+function dibujarRutasDeVendedor(doc: jsPDF, y: number, rutas: RutaReporte[], country: ReporteVendedor['country']): number {
+  const anchoPagina = doc.internal.pageSize.getWidth()
+  const anchoContenido = anchoPagina - MARGEN * 2
+  let yActual = y
+
+  if (rutas.length === 0) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(10)
+    doc.setTextColor(...TEXTO_SUAVE)
+    doc.text('No hay rutas registradas en este período.', MARGEN, yActual)
+    return yActual + 8
+  }
+
+  for (const ruta of rutas) {
+    yActual = saltoDePagina(doc, yActual, 30)
+
+    // Barra de encabezado de la ruta, con la etiqueta "Activa" si sigue en curso.
+    doc.setFillColor(...INK_CLARO)
+    doc.rect(MARGEN, yActual, anchoContenido, 9, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10.5)
+    doc.setTextColor(...INK)
+    doc.text(`Ruta iniciada el ${formatearFecha(ruta.fechaInicioReal)}`, MARGEN + 3, yActual + 6.2)
+    if (!ruta.fechaFinReal) {
+      const etiquetaActiva = 'ACTIVA'
+      doc.setFontSize(7.5)
+      const anchoEtiqueta = doc.getTextWidth(etiquetaActiva) + 6
+      doc.setFillColor(...HIGHLIGHT)
+      doc.roundedRect(MARGEN + anchoContenido - anchoEtiqueta - 3, yActual + 2, anchoEtiqueta, 5, 1, 1, 'F')
+      doc.setTextColor(...INK)
+      doc.setFont('helvetica', 'bold')
+      doc.text(etiquetaActiva, MARGEN + anchoContenido - anchoEtiqueta - 3 + anchoEtiqueta / 2, yActual + 5.4, {
+        align: 'center',
+      })
+    }
+    yActual += 12
+
+    if (ruta.comenzoAntesDelRango) {
+      doc.setFont('helvetica', 'italic')
+      doc.setFontSize(8)
+      doc.setTextColor(...TEXTO_SUAVE)
+      const nota = `Nota: esta ruta comenzó antes del período seleccionado (${formatearFecha(ruta.fechaInicioReal)}); aquí solo se cuentan los días dentro del rango.`
+      doc.text(nota, MARGEN + 2, yActual, { maxWidth: anchoContenido - 4 })
+      yActual += 7
+    }
+
+    // Línea de estadísticas: etiqueta gris pequeña arriba, valor en negrita abajo.
+    const estadisticas: [string, string][] = [
+      ['Visitas', String(ruta.visitas)],
+      ['Ventas', String(ruta.ventas)],
+      ['Total', formatMonto(ruta.totalVendido, country)],
+    ]
+    const anchoEstadistica = 34
+    estadisticas.forEach(([etiqueta, valor], i) => {
+      const x = MARGEN + 2 + i * anchoEstadistica
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(7.5)
+      doc.setTextColor(...TEXTO_SUAVE)
+      doc.text(etiqueta.toUpperCase(), x, yActual)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(10)
+      doc.setTextColor(...TEXTO)
+      doc.text(valor, x, yActual + 5)
+    })
+    yActual += 11
+
+    if (ruta.ventasDetalle.length > 0) {
+      yActual = dibujarTablaVentas(doc, yActual, ruta.ventasDetalle, country, 'normal')
+    } else {
+      doc.setFont('helvetica', 'italic')
+      doc.setFontSize(9)
+      doc.setTextColor(...TEXTO_SUAVE)
+      doc.text('Sin ventas en este período.', MARGEN + 2, yActual)
+      yActual += 9
+    }
+
+    if (ruta.ventasCanceladas.length > 0) {
+      yActual = saltoDePagina(doc, yActual, 30)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8.5)
+      doc.setTextColor(...CANCELADA)
+      doc.text('Ventas canceladas en este período (no incluidas en el total)', MARGEN + 2, yActual)
+      yActual += 4
+      yActual = dibujarTablaVentas(doc, yActual, ruta.ventasCanceladas, country, 'cancelada')
+    }
+
+    yActual += 4
+  }
+
+  return yActual
+}
+
+function nombreDeArchivo(prefijo: string, desde: string, hasta: string): string {
+  return `${prefijo}-${desde}_a_${hasta}.pdf`
+}
+
 /** Arma un PDF con marca (encabezado morado, logo, tarjetas de resumen y tablas con estilo)
  * del detalle de ventas de un vendedor en un rango de fechas, y dispara la descarga. Una
  * sección por ruta (semana) que se traslape con el rango; si una ruta empezó antes del rango
@@ -148,137 +298,96 @@ export async function generarReportePdf(reporte: ReporteVendedor): Promise<void>
   const anchoPagina = doc.internal.pageSize.getWidth()
   const anchoContenido = anchoPagina - MARGEN * 2
 
-  // Encabezado con marca --------------------------------------------------
-  const altoEncabezado = 30
-  doc.setFillColor(...INK)
-  doc.rect(0, 0, anchoPagina, altoEncabezado, 'F')
-  doc.setFillColor(...HIGHLIGHT)
-  doc.rect(0, altoEncabezado, anchoPagina, 1.5, 'F')
-
   const logo = await cargarLogo()
-  let xTitulo = MARGEN
-  if (logo) {
-    const altoLogo = 13
-    const anchoLogo = altoLogo * (logo.ancho / logo.alto)
-    const yLogo = (altoEncabezado - altoLogo - 6) / 2
-    doc.setFillColor(255, 255, 255)
-    doc.roundedRect(MARGEN, yLogo, anchoLogo + 6, altoLogo + 6, 1.5, 1.5, 'F')
-    doc.addImage(logo.dataUrl, 'PNG', MARGEN + 3, yLogo + 3, anchoLogo, altoLogo)
-    xTitulo = MARGEN + anchoLogo + 12
-  }
+  let y = dibujarEncabezadoMarca(doc, logo, 'Reporte de ventas', reporte.vendedorNombre)
 
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(16)
-  doc.setTextColor(255, 255, 255)
-  doc.text('Reporte de ventas', xTitulo, altoEncabezado / 2 - 1)
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(10)
-  doc.setTextColor(226, 232, 240)
-  doc.text(reporte.vendedorNombre, xTitulo, altoEncabezado / 2 + 6)
-
-  let y = altoEncabezado + 12
-
-  // Tarjetas de resumen ----------------------------------------------------
   const totalVendidoGeneral = reporte.rutas.reduce((suma, r) => suma + r.totalVendido, 0)
   const totalVisitas = reporte.rutas.reduce((suma, r) => suma + r.visitas, 0)
-  const espacioEntreTarjetas = 4
-  const anchoTarjeta = (anchoContenido - espacioEntreTarjetas * 3) / 4
-  const altoTarjeta = 19
-  const tarjetas: [string, string, boolean?][] = [
+  y = dibujarFilaDeTarjetas(doc, y, anchoContenido, [
     ['Período', `${formatearFecha(reporte.desde)} – ${formatearFecha(reporte.hasta)}`],
     ['Rutas', String(reporte.totalRutas)],
     ['Visitas', String(totalVisitas)],
     ['Total vendido', formatMonto(totalVendidoGeneral, reporte.country), true],
-  ]
-  tarjetas.forEach(([etiqueta, valor, destacar], i) => {
-    dibujarTarjeta(doc, MARGEN + i * (anchoTarjeta + espacioEntreTarjetas), y, anchoTarjeta, altoTarjeta, etiqueta, valor, destacar)
-  })
-  y += altoTarjeta + 10
+  ])
 
-  if (reporte.rutas.length === 0) {
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(10)
-    doc.setTextColor(...TEXTO_SUAVE)
-    doc.text('No hay rutas registradas en este período.', MARGEN, y)
-  }
-
-  // Una sección por ruta ----------------------------------------------------
-  for (const ruta of reporte.rutas) {
-    y = saltoDePagina(doc, y, 30)
-
-    // Barra de encabezado de la ruta, con la etiqueta "Activa" si sigue en curso.
-    doc.setFillColor(...INK_CLARO)
-    doc.rect(MARGEN, y, anchoContenido, 9, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(10.5)
-    doc.setTextColor(...INK)
-    doc.text(`Ruta iniciada el ${formatearFecha(ruta.fechaInicioReal)}`, MARGEN + 3, y + 6.2)
-    if (!ruta.fechaFinReal) {
-      const etiquetaActiva = 'ACTIVA'
-      doc.setFontSize(7.5)
-      const anchoEtiqueta = doc.getTextWidth(etiquetaActiva) + 6
-      doc.setFillColor(...HIGHLIGHT)
-      doc.roundedRect(MARGEN + anchoContenido - anchoEtiqueta - 3, y + 2, anchoEtiqueta, 5, 1, 1, 'F')
-      doc.setTextColor(...INK)
-      doc.setFont('helvetica', 'bold')
-      doc.text(etiquetaActiva, MARGEN + anchoContenido - anchoEtiqueta - 3 + anchoEtiqueta / 2, y + 5.4, { align: 'center' })
-    }
-    y += 12
-
-    if (ruta.comenzoAntesDelRango) {
-      doc.setFont('helvetica', 'italic')
-      doc.setFontSize(8)
-      doc.setTextColor(...TEXTO_SUAVE)
-      const nota = `Nota: esta ruta comenzó antes del período seleccionado (${formatearFecha(ruta.fechaInicioReal)}); aquí solo se cuentan los días dentro del rango.`
-      doc.text(nota, MARGEN + 2, y, { maxWidth: anchoContenido - 4 })
-      y += 7
-    }
-
-    // Línea de estadísticas: etiqueta gris pequeña arriba, valor en negrita abajo.
-    const estadisticas: [string, string][] = [
-      ['Visitas', String(ruta.visitas)],
-      ['Ventas', String(ruta.ventas)],
-      ['Total', formatMonto(ruta.totalVendido, reporte.country)],
-    ]
-    const anchoEstadistica = 34
-    estadisticas.forEach(([etiqueta, valor], i) => {
-      const x = MARGEN + 2 + i * anchoEstadistica
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(7.5)
-      doc.setTextColor(...TEXTO_SUAVE)
-      doc.text(etiqueta.toUpperCase(), x, y)
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(10)
-      doc.setTextColor(...TEXTO)
-      doc.text(valor, x, y + 5)
-    })
-    y += 11
-
-    if (ruta.ventasDetalle.length > 0) {
-      y = dibujarTablaVentas(doc, y, ruta.ventasDetalle, reporte.country, 'normal')
-    } else {
-      doc.setFont('helvetica', 'italic')
-      doc.setFontSize(9)
-      doc.setTextColor(...TEXTO_SUAVE)
-      doc.text('Sin ventas en este período.', MARGEN + 2, y)
-      y += 9
-    }
-
-    if (ruta.ventasCanceladas.length > 0) {
-      y = saltoDePagina(doc, y, 30)
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(8.5)
-      doc.setTextColor(...CANCELADA)
-      doc.text('Ventas canceladas en este período (no incluidas en el total)', MARGEN + 2, y)
-      y += 4
-      y = dibujarTablaVentas(doc, y, ruta.ventasCanceladas, reporte.country, 'cancelada')
-    }
-
-    y += 4
-  }
-
+  dibujarRutasDeVendedor(doc, y, reporte.rutas, reporte.country)
   dibujarPie(doc)
 
   const nombreVendedor = reporte.vendedorNombre.trim().toLowerCase().replace(/\s+/g, '-')
-  doc.save(`reporte-${nombreVendedor}-${reporte.desde}_a_${reporte.hasta}.pdf`)
+  doc.save(nombreDeArchivo(`reporte-${nombreVendedor}`, reporte.desde, reporte.hasta))
+}
+
+/** Reporte consolidado de varios vendedores en un solo PDF, para country managers que quieren
+ * ver a todo su equipo de un jalón: portada con tarjetas de resumen + una tabla comparativa
+ * (vendedor/rutas/visitas/total), y después el mismo desglose por ruta que el reporte
+ * individual, uno por vendedor, cada uno empezando en página nueva. */
+export async function generarReporteConsolidadoPdf(
+  reportes: ReporteVendedor[],
+  opciones: { etiquetaAlcance: string; desde: string; hasta: string },
+): Promise<void> {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+  const anchoPagina = doc.internal.pageSize.getWidth()
+  const anchoContenido = anchoPagina - MARGEN * 2
+  const paisComun = reportes.find((r) => r.country != null)?.country ?? null
+
+  const logo = await cargarLogo()
+  let y = dibujarEncabezadoMarca(doc, logo, 'Reporte consolidado de ventas', opciones.etiquetaAlcance)
+
+  const totalVendidoGeneral = reportes.reduce(
+    (suma, r) => suma + r.rutas.reduce((s, ruta) => s + ruta.totalVendido, 0),
+    0,
+  )
+  const totalRutas = reportes.reduce((suma, r) => suma + r.totalRutas, 0)
+  y = dibujarFilaDeTarjetas(doc, y, anchoContenido, [
+    ['Período', `${formatearFecha(opciones.desde)} – ${formatearFecha(opciones.hasta)}`],
+    ['Vendedores', String(reportes.length)],
+    ['Rutas', String(totalRutas)],
+    ['Total vendido', formatMonto(totalVendidoGeneral, paisComun), true],
+  ])
+
+  // Tabla comparativa: un vistazo rápido de todo el equipo antes del detalle por vendedor.
+  const filasComparativa = reportes
+    .map((r) => ({
+      nombre: r.vendedorNombre,
+      rutas: r.totalRutas,
+      visitas: r.rutas.reduce((s, ruta) => s + ruta.visitas, 0),
+      total: r.rutas.reduce((s, ruta) => s + ruta.totalVendido, 0),
+      country: r.country,
+    }))
+    .sort((a, b) => b.total - a.total)
+
+  autoTable(doc, {
+    startY: y,
+    margin: { left: MARGEN, right: MARGEN },
+    head: [['Vendedor', 'Rutas', 'Visitas', 'Total vendido']],
+    body: filasComparativa.map((f) => [f.nombre, String(f.rutas), String(f.visitas), formatMonto(f.total, f.country)]),
+    theme: 'striped',
+    styles: { fontSize: 9, textColor: TEXTO, cellPadding: { top: 2, bottom: 2, left: 4, right: 4 } },
+    headStyles: { fillColor: INK, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8.5 },
+    alternateRowStyles: { fillColor: FONDO_TARJETA },
+    columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } },
+    tableWidth: anchoContenido,
+    tableLineColor: LINEA,
+    tableLineWidth: 0.1,
+  })
+  y = finalYDeLaTabla(doc, y) + 10
+
+  // Detalle por vendedor, cada uno en página nueva para que sea fácil imprimir/compartir uno
+  // en particular.
+  for (const reporte of reportes) {
+    doc.addPage()
+    y = 20
+    doc.setFillColor(...INK_CLARO)
+    doc.rect(MARGEN, y, anchoContenido, 11, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(12)
+    doc.setTextColor(...INK)
+    doc.text(reporte.vendedorNombre, MARGEN + 3, y + 7.5)
+    y += 16
+
+    dibujarRutasDeVendedor(doc, y, reporte.rutas, reporte.country)
+  }
+
+  dibujarPie(doc)
+  doc.save(nombreDeArchivo('reporte-consolidado', opciones.desde, opciones.hasta))
 }

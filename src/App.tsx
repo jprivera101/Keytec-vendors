@@ -11,6 +11,7 @@ import { AdminLayout } from './features/admin/AdminLayout'
 import { ResumenAdmin } from './features/admin/ResumenAdmin'
 import { VendedoresAdmin } from './features/admin/VendedoresAdmin'
 import { AnaliticaAdmin } from './features/admin/AnaliticaAdmin'
+import { ReporteriaAdmin } from './features/admin/ReporteriaAdmin'
 import { RolesAdmin } from './features/admin/RolesAdmin'
 import { TiendasAdmin } from './features/admin/TiendasAdmin'
 import { DepositosAdmin } from './features/admin/DepositosAdmin'
@@ -58,6 +59,7 @@ export default function App() {
         <Route path="vendedores" element={<VendedoresAdmin />} />
         <Route path="tiendas/:storeId?" element={<TiendasAdmin />} />
         <Route path="analitica/:salesmanId?/:weekId?" element={<AnaliticaAdmin />} />
+        <Route path="reporteria" element={<ReporteriaAdmin />} />
         <Route path="depositos" element={<DepositosAdmin />} />
         <Route path="ventas-canceladas" element={<VentasCanceladasAdmin />} />
         <Route path="roles" element={<RolesAdmin />} />
