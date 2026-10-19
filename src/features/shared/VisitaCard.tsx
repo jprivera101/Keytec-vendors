@@ -17,6 +17,8 @@ interface Props {
   country?: CountryCode | null
   /** Admin/super_admin: puede corregir el monto o cancelar una venta (con motivo). */
   puedeGestionarVentas?: boolean
+  /** Admin/super_admin: muestra si cada venta ya fue operada (procesada) por el operario. */
+  mostrarEstadoOperacion?: boolean
 }
 
 /** Fila compacta por defecto (foto miniatura + nombre + monto); el detalle completo de cada
@@ -28,6 +30,7 @@ export function VisitaCard({
   puedeAgregarVenta,
   country,
   puedeGestionarVentas = false,
+  mostrarEstadoOperacion = false,
 }: Props) {
   const [expandido, setExpandido] = useState(false)
   const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null)
@@ -36,6 +39,7 @@ export function VisitaCard({
   const [ventaCancelando, setVentaCancelando] = useState<Sale | null>(null)
   const ventasActivas = visita.sales.filter((v) => !v.cancelled)
   const totalVenta = ventasActivas.reduce((suma, v) => suma + Number(v.amount), 0)
+  const ventasSinOperar = ventasActivas.filter((v) => !v.processed).length
   // Si esta visita puntual no tiene foto propia (tienda ya existente + foto de visita
   // desactivada), se muestra la foto permanente de la tienda en su lugar.
   const fotoVisita = visita.photo_path ?? visita.store_photo_path ?? null
@@ -69,6 +73,11 @@ export function VisitaCard({
           <p className="text-xs text-slate-400">
             {ventasActivas.length} venta{ventasActivas.length !== 1 && 's'}
           </p>
+          {mostrarEstadoOperacion && ventasActivas.length > 0 && (
+            <p className={`text-[11px] font-semibold ${ventasSinOperar > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+              {ventasSinOperar > 0 ? `${ventasSinOperar} sin operar` : '✓ Operada'}
+            </p>
+          )}
         </div>
         <IconChevron
           className={`shrink-0 text-slate-400 transition-transform ${expandido ? 'rotate-180' : ''}`}
@@ -140,6 +149,9 @@ export function VisitaCard({
                       <div className="text-right">
                         <p className="text-[11px] text-slate-400">Monto vendido</p>
                         <p className="font-semibold text-slate-900">{formatMonto(Number(venta.amount), country)}</p>
+                        {mostrarEstadoOperacion && !venta.cancelled && (
+                          <EstadoOperacion processed={venta.processed} processedAt={venta.processed_at} />
+                        )}
                       </div>
                     </div>
 
@@ -205,6 +217,28 @@ export function VisitaCard({
       <EditarMontoVentaModal venta={ventaEditando} onCerrar={() => setVentaEditando(null)} />
       <CancelarVentaModal venta={ventaCancelando} country={country} onCerrar={() => setVentaCancelando(null)} />
     </div>
+  )
+}
+
+/** Badge "Operada" / "Sin operar" según si el operario ya procesó la venta en el CRM. */
+export function EstadoOperacion({ processed, processedAt }: { processed: boolean; processedAt: string | null }) {
+  if (!processed) {
+    return (
+      <span className="mt-1 inline-block rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+        Sin operar
+      </span>
+    )
+  }
+  const fecha = processedAt
+    ? new Date(processedAt).toLocaleString('es-GT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : null
+  return (
+    <span
+      className="mt-1 inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700"
+      title={fecha ? `Operada el ${fecha}` : undefined}
+    >
+      ✓ Operada{fecha && ` · ${fecha}`}
+    </span>
   )
 }
 

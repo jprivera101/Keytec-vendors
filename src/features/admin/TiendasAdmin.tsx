@@ -385,6 +385,7 @@ function DetalleTienda({ storeId, puedeGestionarVentas }: { storeId: string; pue
                   onAgregarVenta={() => {}}
                   country={tiendaQuery.data?.country}
                   puedeGestionarVentas={puedeGestionarVentas}
+                  mostrarEstadoOperacion
                 />
               ))}
             </SeccionColapsable>

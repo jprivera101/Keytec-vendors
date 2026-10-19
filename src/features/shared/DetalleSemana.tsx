@@ -34,6 +34,7 @@ export function DetalleSemana({
   puedeReabrirTracking = false,
   puedeEditarKm = false,
   puedeGestionarVentas = false,
+  mostrarEstadoOperacion = false,
 }: {
   weekId: string
   tiendasRegion?: TiendaConLugar[]
@@ -46,6 +47,8 @@ export function DetalleSemana({
   puedeEditarKm?: boolean
   /** Admin/super_admin: puede corregir el monto o cancelar una venta (con motivo). */
   puedeGestionarVentas?: boolean
+  /** Admin/super_admin: muestra si cada venta ya fue operada por el operario. */
+  mostrarEstadoOperacion?: boolean
 }) {
   const queryClient = useQueryClient()
   const semanaQuery = useQuery({
@@ -96,10 +99,11 @@ export function DetalleSemana({
       0,
     ) + ventasEnvio.filter((v) => !v.cancelled).reduce((suma, v) => suma + Number(v.amount), 0)
   const totalGasolina = gasolina.reduce((suma, g) => suma + Number(g.amount), 0)
-  const ventasSinProcesar = visitas.reduce(
-    (suma, v) => suma + v.sales.filter((venta) => !venta.processed && !venta.cancelled).length,
-    0,
-  )
+  const ventasSinProcesar =
+    visitas.reduce(
+      (suma, v) => suma + v.sales.filter((venta) => !venta.processed && !venta.cancelled).length,
+      0,
+    ) + ventasEnvio.filter((v) => !v.processed && !v.cancelled).length
   const kmRecorridos =
     semana.end_mileage_km != null ? semana.end_mileage_km - semana.start_mileage_km : null
   const visitasFiltradas = visitas.filter((v) =>
@@ -163,6 +167,7 @@ export function DetalleSemana({
             onAgregarVenta={onAgregarVenta}
             country={country}
             puedeGestionarVentas={puedeGestionarVentas}
+            mostrarEstadoOperacion={mostrarEstadoOperacion}
           />
         ))}
         {visitas.length === 0 && <p className="text-sm text-slate-400">Sin visitas registradas.</p>}
@@ -181,6 +186,7 @@ export function DetalleSemana({
                 venta={venta}
                 country={country}
                 puedeGestionarVentas={puedeGestionarVentas}
+                mostrarEstadoOperacion={mostrarEstadoOperacion}
               />
             ))}
           </div>

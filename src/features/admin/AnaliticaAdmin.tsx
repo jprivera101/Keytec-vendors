@@ -367,6 +367,7 @@ export function AnaliticaAdmin() {
           puedeReabrirTracking
           puedeEditarKm={profile.role === 'super_admin'}
           puedeGestionarVentas
+          mostrarEstadoOperacion
         />
       ) : (
         <Spinner />

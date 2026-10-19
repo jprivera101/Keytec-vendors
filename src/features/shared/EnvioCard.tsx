@@ -6,6 +6,7 @@ import { Modal } from '../../components/Modal'
 import { formatMonto } from '../../lib/currency'
 import { useAuth } from '../../lib/useAuth'
 import { editarMontoVentaEnvio, cancelarVentaEnvio } from '../../lib/api'
+import { EstadoOperacion } from './VisitaCard'
 import type { CountryCode, VentaEnvio } from '../../lib/types'
 
 interface Props {
@@ -13,10 +14,17 @@ interface Props {
   country?: CountryCode | null
   /** Admin/super_admin: puede corregir el monto o cancelar la venta (con motivo). */
   puedeGestionarVentas?: boolean
+  /** Admin/super_admin: muestra si la venta ya fue operada (procesada) por el operario. */
+  mostrarEstadoOperacion?: boolean
 }
 
 /** Fila de una venta por envío: sin tienda ni ubicación, solo a quién se le vendió + foto + monto. */
-export function EnvioCard({ venta, country, puedeGestionarVentas = false }: Props) {
+export function EnvioCard({
+  venta,
+  country,
+  puedeGestionarVentas = false,
+  mostrarEstadoOperacion = false,
+}: Props) {
   const [fotoAmpliada, setFotoAmpliada] = useState(false)
   const [editando, setEditando] = useState(false)
   const [cancelando, setCancelando] = useState(false)
@@ -49,7 +57,12 @@ export function EnvioCard({ venta, country, puedeGestionarVentas = false }: Prop
           <p className="truncate font-semibold text-slate-900">📦 {venta.client_name}</p>
           <p className="text-xs text-slate-400">{fecha}</p>
         </div>
-        <p className="shrink-0 text-sm font-bold text-slate-900">{formatMonto(venta.amount, country)}</p>
+        <div className="shrink-0 text-right">
+          <p className="text-sm font-bold text-slate-900">{formatMonto(venta.amount, country)}</p>
+          {mostrarEstadoOperacion && !venta.cancelled && (
+            <EstadoOperacion processed={venta.processed} processedAt={venta.processed_at} />
+          )}
+        </div>
       </div>
 
       {venta.cancelled ? (
