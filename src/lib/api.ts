@@ -467,6 +467,8 @@ export async function obtenerUltimoKmTracking(salesmanId: string): Promise<numbe
     .select('start_km, end_km')
     .eq('salesman_id', salesmanId)
     .order('tracking_date', { ascending: false })
+    // Puede haber dos registros el mismo dia si el vendedor abrio una semana nueva ese dia.
+    .order('started_at', { ascending: false })
     .limit(1)
     .maybeSingle()
   if (error) throw error

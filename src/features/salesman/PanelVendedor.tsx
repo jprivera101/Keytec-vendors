@@ -13,7 +13,7 @@ import {
 import { crearSemana, finalizarSemana } from '../../lib/api'
 import { formatMonto } from '../../lib/currency'
 import { formatNumero } from '../../lib/numeros'
-import { fechaLocalISO } from '../../lib/fechas'
+import { fechaDesdeISO, fechaLocalISO } from '../../lib/fechas'
 import { IniciarSemanaModal } from './IniciarSemanaModal'
 import { FinalizarSemanaModal } from './FinalizarSemanaModal'
 import { NuevaVisitaModal } from './NuevaVisitaModal'
@@ -127,7 +127,7 @@ export function PanelVendedor() {
                   ● Semana activa
                 </span>
                 <span className="text-xs text-slate-400">
-                  Desde {new Date(semana.start_date).toLocaleDateString('es-GT')}
+                  Desde {fechaDesdeISO(semana.start_date).toLocaleDateString('es-GT')}
                 </span>
               </div>
               <p className="text-sm text-slate-500">

@@ -22,6 +22,7 @@ import { EnvioCard } from '../shared/EnvioCard'
 import { DepositoCard } from '../shared/DepositoCard'
 import { ParqueoModal } from './ParqueoModal'
 import { rangoDeSemana } from '../../lib/rangoSemana'
+import { fechaDesdeISO } from '../../lib/fechas'
 
 interface Props {
   weekId: string
@@ -112,8 +113,8 @@ export function ResumenRuta({ weekId, puedeAgregarVenta = false, onAgregarVenta 
               {semana.status === 'active' ? '● Ruta activa' : 'Ruta completada'}
             </span>
             <p className="mt-1.5 text-xs text-slate-400">
-              Desde {new Date(semana.start_date).toLocaleDateString('es-GT')}
-              {semana.end_date && ` hasta ${new Date(semana.end_date).toLocaleDateString('es-GT')}`}
+              Desde {fechaDesdeISO(semana.start_date).toLocaleDateString('es-GT')}
+              {semana.end_date && ` hasta ${fechaDesdeISO(semana.end_date).toLocaleDateString('es-GT')}`}
             </p>
           </div>
           <div className="text-right">

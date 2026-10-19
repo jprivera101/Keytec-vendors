@@ -5,6 +5,7 @@ import { obtenerHistorialSemanas } from '../../lib/api'
 import { Spinner } from '../../components/Spinner'
 import { ResumenRuta } from './ResumenRuta'
 import { IconChevron, IconHistorial } from '../../components/icons'
+import { fechaDesdeISO } from '../../lib/fechas'
 
 export function HistorialSemanas() {
   const { profile } = useAuth()
@@ -48,8 +49,8 @@ export function HistorialSemanas() {
               >
                 <div>
                   <p className="font-medium text-slate-900">
-                    {new Date(semana.start_date).toLocaleDateString('es-GT')}
-                    {semana.end_date && ` – ${new Date(semana.end_date).toLocaleDateString('es-GT')}`}
+                    {fechaDesdeISO(semana.start_date).toLocaleDateString('es-GT')}
+                    {semana.end_date && ` – ${fechaDesdeISO(semana.end_date).toLocaleDateString('es-GT')}`}
                   </p>
                   <p className="text-xs text-slate-500">
                     {semana.status === 'active' ? 'Semana activa' : 'Completada'}

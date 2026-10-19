@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { obtenerSemanasDeVendedor, obtenerVendedores, obtenerVisitasPorPaisYRango } from '../../lib/api'
 import { obtenerTiendasPorRegion } from '../../lib/tiendas'
 import { obtenerRegionesPorPais } from '../../lib/regiones'
-import { fechaLocalISO, lunesDeLaSemana, limitesSemanaCalendario, semanasCalendarioDeMes } from '../../lib/fechas'
+import { fechaDesdeISO, fechaLocalISO, lunesDeLaSemana, limitesSemanaCalendario, semanasCalendarioDeMes } from '../../lib/fechas'
 import { Spinner } from '../../components/Spinner'
 import { BuscadorVendedor } from '../../components/BuscadorVendedor'
 import { PageHeader } from '../../components/PageHeader'
@@ -76,11 +76,11 @@ export function AnaliticaAdmin() {
       : (vendedoresQuery.data ?? []).filter((v) => v.route_id === regionId)
 
   const aniosDisponibles = Array.from(
-    new Set((semanasQuery.data ?? []).map((s) => new Date(s.start_date).getFullYear())),
+    new Set((semanasQuery.data ?? []).map((s) => fechaDesdeISO(s.start_date).getFullYear())),
   ).sort((a, b) => b - a)
 
   const semanasFiltradas = (semanasQuery.data ?? []).filter((s) => {
-    const fecha = new Date(s.start_date)
+    const fecha = fechaDesdeISO(s.start_date)
     if (anioFiltro !== 'ALL' && fecha.getFullYear() !== anioFiltro) return false
     if (mesFiltro !== 'ALL' && fecha.getMonth() !== mesFiltro) return false
     return true
@@ -330,7 +330,7 @@ export function AnaliticaAdmin() {
                   >
                     {semanasFiltradas.map((semana) => (
                       <option key={semana.id} value={semana.id}>
-                        {new Date(semana.start_date).toLocaleDateString('es-GT')}
+                        {fechaDesdeISO(semana.start_date).toLocaleDateString('es-GT')}
                         {semana.status === 'active' ? ' · activa' : ''}
                       </option>
                     ))}
