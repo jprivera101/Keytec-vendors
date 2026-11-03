@@ -1,3 +1,4 @@
+import type { PostgrestError } from '@supabase/supabase-js'
 import { supabase } from './supabaseClient'
 import { fechaLocalISO, fechaDesdeISO } from './fechas'
 import type {
@@ -27,6 +28,25 @@ import type {
 
 /** Traduce un username al correo real (lo que Supabase Auth necesita para iniciar sesion),
  * via una funcion de base de datos callable de forma anonima. Devuelve null si no existe. */
+/** Supabase (PostgREST) devuelve como máximo 1000 filas por consulta y corta el resto SIN
+ * avisar: el Resumen del mes se quedaba clavado en 1000 visitas en cuanto un mes las pasaba
+ * (y las ventas de las visitas cortadas no sumaban). Esto pide la consulta por páginas hasta
+ * traerlo todo. `pagina` debe aplicar `.range(desde, hasta)` sobre una consulta con un orden
+ * estable y único (p.ej. por id); si no, las páginas pueden repetir o saltarse filas. */
+const FILAS_POR_PAGINA = 1000
+
+async function traerTodasLasFilas<T>(
+  pagina: (desde: number, hasta: number) => PromiseLike<{ data: T[] | null; error: PostgrestError | null }>,
+): Promise<T[]> {
+  const filas: T[] = []
+  for (let desde = 0; ; desde += FILAS_POR_PAGINA) {
+    const { data, error } = await pagina(desde, desde + FILAS_POR_PAGINA - 1)
+    if (error) throw error
+    filas.push(...(data ?? []))
+    if (!data || data.length < FILAS_POR_PAGINA) return filas
+  }
+}
+
 export async function resolverEmailDeUsername(username: string): Promise<string | null> {
   const { data, error } = await supabase.rpc('resolver_email_de_username', {
     nombre_usuario: username,
@@ -202,28 +222,29 @@ export async function obtenerVisitasPorPaisYRango(
   desde: Date,
   hasta: Date,
 ): Promise<VisitaConVendedor[]> {
-  const { data: semanasDelPais, error: semanasError } = await supabase
-    .from('weeks')
-    .select('id, salesman_id, profiles!inner(country)')
-    .eq('profiles.country', pais)
-  if (semanasError) throw semanasError
-  if (!semanasDelPais || semanasDelPais.length === 0) return []
-
-  const salesmanPorSemana = new Map(semanasDelPais.map((s) => [s.id, s.salesman_id]))
-
-  const { data: visitas, error } = await supabase
-    .from('visits')
-    .select('*, sales(*), stores(photo_path)')
-    .in('week_id', Array.from(salesmanPorSemana.keys()))
-    .gte('captured_at', desde.toISOString())
-    .lt('captured_at', hasta.toISOString())
-    .order('captured_at', { ascending: true })
-  if (error) throw error
-
-  const aplanadas = aplanarFotoTienda(
-    visitas as unknown as (VisitWithSales & { stores: { photo_path: string | null } | null })[],
+  // El país se filtra con un join (weeks -> profiles) en vez de pasar la lista de TODAS las
+  // semanas del país en un .in(): esa lista crece cada semana hasta romper la URL.
+  const visitas = await traerTodasLasFilas((desdeFila, hastaFila) =>
+    supabase
+      .from('visits')
+      .select('*, sales(*), stores(photo_path), weeks!inner(salesman_id, profiles!inner(country))')
+      .eq('weeks.profiles.country', pais)
+      .gte('captured_at', desde.toISOString())
+      .lt('captured_at', hasta.toISOString())
+      .order('captured_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(desdeFila, hastaFila),
   )
-  return aplanadas.map((v) => ({ ...v, salesman_id: salesmanPorSemana.get(v.week_id)! }))
+
+  const filas = visitas as unknown as (VisitWithSales & {
+    stores: { photo_path: string | null } | null
+    weeks: { salesman_id: string }
+  })[]
+  return filas.map(({ weeks, stores, ...v }) => ({
+    ...v,
+    store_photo_path: stores?.photo_path ?? null,
+    salesman_id: weeks.salesman_id,
+  }))
 }
 
 // Gasolina -------------------------------------------------------------
@@ -729,28 +750,34 @@ async function metricasPorSemana(weekIds: string[]): Promise<Map<string, { visit
   const resultado = new Map<string, { visitas: number; ventas: number }>()
   if (weekIds.length === 0) return resultado
 
-  const { data: visitas, error } = await supabase
-    .from('visits')
-    .select('week_id, sales(amount)')
-    .in('week_id', weekIds)
-    .eq('sales.cancelled', false)
-  if (error) throw error
+  const visitas = await traerTodasLasFilas((desde, hasta) =>
+    supabase
+      .from('visits')
+      .select('week_id, sales(amount)')
+      .in('week_id', weekIds)
+      .eq('sales.cancelled', false)
+      .order('id', { ascending: true })
+      .range(desde, hasta),
+  )
 
-  for (const v of (visitas ?? []) as unknown as { week_id: string; sales: { amount: number }[] }[]) {
+  for (const v of visitas as unknown as { week_id: string; sales: { amount: number }[] }[]) {
     const fila = resultado.get(v.week_id) ?? { visitas: 0, ventas: 0 }
     fila.visitas += 1
     fila.ventas += (v.sales ?? []).reduce((s, venta) => s + Number(venta.amount), 0)
     resultado.set(v.week_id, fila)
   }
 
-  const { data: envios, error: enviosError } = await supabase
-    .from('shipment_sales')
-    .select('week_id, amount')
-    .in('week_id', weekIds)
-    .eq('cancelled', false)
-  if (enviosError) throw enviosError
+  const envios = await traerTodasLasFilas((desde, hasta) =>
+    supabase
+      .from('shipment_sales')
+      .select('week_id, amount')
+      .in('week_id', weekIds)
+      .eq('cancelled', false)
+      .order('id', { ascending: true })
+      .range(desde, hasta),
+  )
 
-  for (const e of envios ?? []) {
+  for (const e of envios) {
     const fila = resultado.get(e.week_id) ?? { visitas: 0, ventas: 0 }
     fila.ventas += Number(e.amount)
     resultado.set(e.week_id, fila)
@@ -1054,16 +1081,18 @@ export async function obtenerTopLugaresEnRango(
   desde: string,
   hastaExclusiva: string,
 ): Promise<TopLugarDelMes[]> {
-  let query = supabase
-    .from('ventas_lugares_mes')
-    .select('amount, place_id, place_name, route_id, route_name, country')
-    .eq('cancelled', false)
-    .gte('week_start_date', desde)
-    .lt('week_start_date', hastaExclusiva)
-  if (pais !== 'ALL') query = query.eq('country', pais)
-  const { data: ventas, error } = await query
-  if (error) throw error
-  if (!ventas || ventas.length === 0) return []
+  const ventas = await traerTodasLasFilas((desdeFila, hastaFila) => {
+    let query = supabase
+      .from('ventas_lugares_mes')
+      .select('amount, place_id, place_name, route_id, route_name, country')
+      .eq('cancelled', false)
+      .gte('week_start_date', desde)
+      .lt('week_start_date', hastaExclusiva)
+    if (pais !== 'ALL') query = query.eq('country', pais)
+    // sale_id (migración 0047) es la única columna única de la vista: orden estable para paginar.
+    return query.order('sale_id', { ascending: true }).range(desdeFila, hastaFila)
+  })
+  if (ventas.length === 0) return []
 
   interface AcumuladoLugar {
     placeName: string
@@ -1147,28 +1176,38 @@ export async function obtenerReporteVendedor(
   const rutas: RutaReporte[] = []
 
   for (const semana of semanas ?? []) {
-    const { data: visitas, error: visitasError } = await supabase
-      .from('visits')
-      .select('id, store_name')
-      .eq('week_id', semana.id)
-      .gte('captured_at', desdeFecha.toISOString())
-      .lt('captured_at', hastaExclusivaFecha.toISOString())
-    if (visitasError) throw visitasError
+    const visitas = await traerTodasLasFilas((desdeFila, hastaFila) =>
+      supabase
+        .from('visits')
+        .select('id, store_name')
+        .eq('week_id', semana.id)
+        .gte('captured_at', desdeFecha.toISOString())
+        .lt('captured_at', hastaExclusivaFecha.toISOString())
+        .order('id', { ascending: true })
+        .range(desdeFila, hastaFila),
+    )
 
-    const nombrePorVisita = new Map((visitas ?? []).map((v) => [v.id, v.store_name || 'Tienda sin nombre']))
+    const nombrePorVisita = new Map(visitas.map((v) => [v.id, v.store_name || 'Tienda sin nombre']))
     const visitIds = Array.from(nombrePorVisita.keys())
 
     const ventasDetalle: VentaReporte[] = []
     const ventasCanceladas: VentaReporte[] = []
 
     if (visitIds.length > 0) {
-      const { data: ventas, error: ventasError } = await supabase
-        .from('sales')
-        .select('amount, created_at, visit_id, cancelled')
-        .in('visit_id', visitIds)
-      if (ventasError) throw ventasError
+      // Filtradas por semana/rango con un join a visits en vez de .in() con todos los ids de
+      // visitas (que en una ruta larga hace la URL demasiado larga).
+      const ventas = await traerTodasLasFilas((desdeFila, hastaFila) =>
+        supabase
+          .from('sales')
+          .select('amount, created_at, visit_id, cancelled, visits!inner(week_id, captured_at)')
+          .eq('visits.week_id', semana.id)
+          .gte('visits.captured_at', desdeFecha.toISOString())
+          .lt('visits.captured_at', hastaExclusivaFecha.toISOString())
+          .order('id', { ascending: true })
+          .range(desdeFila, hastaFila),
+      )
 
-      for (const venta of ventas ?? []) {
+      for (const venta of ventas) {
         const fila: VentaReporte = {
           tienda: nombrePorVisita.get(venta.visit_id) ?? 'Tienda sin nombre',
           fecha: fechaLocalISO(venta.created_at),
@@ -1182,15 +1221,18 @@ export async function obtenerReporteVendedor(
     // Ventas por envío: no cuelgan de una visita (van directo a la semana), pero sí cuentan
     // para "Total vendido" en el resto de la app (ver DetalleSemana) -- sin esto el reporte
     // se quedaba corto contra el dashboard cada vez que un vendedor tenía alguna.
-    const { data: ventasEnvio, error: ventasEnvioError } = await supabase
-      .from('shipment_sales')
-      .select('amount, created_at, client_name, cancelled')
-      .eq('week_id', semana.id)
-      .gte('created_at', desdeFecha.toISOString())
-      .lt('created_at', hastaExclusivaFecha.toISOString())
-    if (ventasEnvioError) throw ventasEnvioError
+    const ventasEnvio = await traerTodasLasFilas((desdeFila, hastaFila) =>
+      supabase
+        .from('shipment_sales')
+        .select('amount, created_at, client_name, cancelled')
+        .eq('week_id', semana.id)
+        .gte('created_at', desdeFecha.toISOString())
+        .lt('created_at', hastaExclusivaFecha.toISOString())
+        .order('id', { ascending: true })
+        .range(desdeFila, hastaFila),
+    )
 
-    for (const venta of ventasEnvio ?? []) {
+    for (const venta of ventasEnvio) {
       const fila: VentaReporte = {
         tienda: `Envío – ${venta.client_name}`,
         fecha: fechaLocalISO(venta.created_at),
