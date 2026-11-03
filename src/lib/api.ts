@@ -1000,7 +1000,13 @@ export async function obtenerRangoFechasConDatos(
 /** Vendedores activos con sus métricas de un rango de fechas arbitrario [desde, hasta] (ambos
  * inclusive, "YYYY-MM-DD"), para la vista de "Personalizado" del Resumen. A diferencia de
  * obtenerComparativoMensual no hay "anterior" -- un rango elegido a mano no tiene un período
- * previo obvio con el que comparar -- así que ese campo siempre viene en null. */
+ * previo obvio con el que comparar -- así que ese campo siempre viene en null.
+ *
+ * Visitas y ventas se cuentan por el día en que OCURRIERON (captured_at / created_at), no por
+ * la fecha en que empezó su semana: antes una semana que arrancó el 28/09 dejaba fuera del
+ * rango "octubre" todas sus visitas de octubre (87 en oct-2026), y una que arrancó el 31/10
+ * metía sus visitas de noviembre. El km sí sigue siendo por semana (solo se conoce el km al
+ * abrir/cerrar la semana), contando las semanas finalizadas que empezaron dentro del rango. */
 export async function obtenerResumenPersonalizado(
   pais: CountryCode | 'ALL',
   region: string | 'ALL',
@@ -1011,38 +1017,75 @@ export async function obtenerResumenPersonalizado(
   if (vendedores.length === 0) return []
   const vendedorIds = vendedores.map((v) => v.id)
 
-  const hastaFecha = new Date(`${hasta}T00:00:00`)
-  const hastaExclusiva = fechaLocalISO(
-    new Date(hastaFecha.getFullYear(), hastaFecha.getMonth(), hastaFecha.getDate() + 1),
-  )
+  const desdeFecha = fechaDesdeISO(desde)
+  const hastaFecha = fechaDesdeISO(hasta)
+  const hastaExclusivaFecha = new Date(hastaFecha.getFullYear(), hastaFecha.getMonth(), hastaFecha.getDate() + 1)
+  const hastaExclusiva = fechaLocalISO(hastaExclusivaFecha)
 
-  const { data: semanasRango, error } = await supabase
-    .from('weeks')
-    .select('id, salesman_id, start_date, start_mileage_km, end_mileage_km')
-    .in('salesman_id', vendedorIds)
-    .gte('start_date', desde)
-    .lt('start_date', hastaExclusiva)
-  if (error) throw error
+  const [semanasRes, visitas, envios] = await Promise.all([
+    supabase
+      .from('weeks')
+      .select('id, salesman_id, start_date, start_mileage_km, end_mileage_km')
+      .in('salesman_id', vendedorIds)
+      .gte('start_date', desde)
+      .lt('start_date', hastaExclusiva),
+    traerTodasLasFilas((desdeFila, hastaFila) =>
+      supabase
+        .from('visits')
+        .select('id, sales(amount), weeks!inner(salesman_id)')
+        .in('weeks.salesman_id', vendedorIds)
+        .eq('sales.cancelled', false)
+        .gte('captured_at', desdeFecha.toISOString())
+        .lt('captured_at', hastaExclusivaFecha.toISOString())
+        .order('id', { ascending: true })
+        .range(desdeFila, hastaFila),
+    ),
+    traerTodasLasFilas((desdeFila, hastaFila) =>
+      supabase
+        .from('shipment_sales')
+        .select('id, amount, weeks!inner(salesman_id)')
+        .in('weeks.salesman_id', vendedorIds)
+        .eq('cancelled', false)
+        .gte('created_at', desdeFecha.toISOString())
+        .lt('created_at', hastaExclusivaFecha.toISOString())
+        .order('id', { ascending: true })
+        .range(desdeFila, hastaFila),
+    ),
+  ])
+  if (semanasRes.error) throw semanasRes.error
+  const semanas = (semanasRes.data ?? []) as FilaSemana[]
 
-  const semanas = (semanasRango ?? []) as FilaSemana[]
-  const metricas = await metricasPorSemana(semanas.map((s) => s.id))
+  const porVendedor = new Map<string, { visitas: number; ventas: number }>()
+  const fila = (id: string) => {
+    if (!porVendedor.has(id)) porVendedor.set(id, { visitas: 0, ventas: 0 })
+    return porVendedor.get(id)!
+  }
+  for (const v of visitas as unknown as { sales: { amount: number }[]; weeks: { salesman_id: string } }[]) {
+    const f = fila(v.weeks.salesman_id)
+    f.visitas += 1
+    f.ventas += (v.sales ?? []).reduce((suma, venta) => suma + Number(venta.amount), 0)
+  }
+  for (const e of envios as unknown as { amount: number; weeks: { salesman_id: string } }[]) {
+    fila(e.weeks.salesman_id).ventas += Number(e.amount)
+  }
 
-  function acumular(delVendedor: FilaSemana[]): MetricasPeriodo | null {
-    if (delVendedor.length === 0) return null
+  function acumular(vendedorId: string): MetricasPeriodo | null {
+    const delVendedor = semanas.filter((s) => s.salesman_id === vendedorId)
+    const actividad = porVendedor.get(vendedorId)
+    if (delVendedor.length === 0 && !actividad) return null
     let km = 0
     let huboSemanaFinalizada = false
-    let visitas = 0
-    let ventas = 0
     for (const semana of delVendedor) {
       if (semana.end_mileage_km != null) {
         km += semana.end_mileage_km - semana.start_mileage_km
         huboSemanaFinalizada = true
       }
-      const m = metricas.get(semana.id)
-      visitas += m?.visitas ?? 0
-      ventas += m?.ventas ?? 0
     }
-    return { kmRecorridos: huboSemanaFinalizada ? km : null, totalVisitas: visitas, totalVentas: ventas }
+    return {
+      kmRecorridos: huboSemanaFinalizada ? km : null,
+      totalVisitas: actividad?.visitas ?? 0,
+      totalVentas: actividad?.ventas ?? 0,
+    }
   }
 
   return vendedores
@@ -1050,7 +1093,7 @@ export async function obtenerResumenPersonalizado(
       vendedorId: vendedor.id,
       nombre: vendedor.full_name,
       country: vendedor.country,
-      actual: acumular(semanas.filter((s) => s.salesman_id === vendedor.id)),
+      actual: acumular(vendedor.id),
       anterior: null,
     }))
     .sort((a, b) => a.nombre.localeCompare(b.nombre))
