@@ -102,6 +102,7 @@ function InvalidarAlCambiarTamano({ activo }: { activo: boolean }) {
 }
 
 interface Grupo {
+  fecha: string
   color: string
   etiqueta: string
   visitas: VisitWithSales[]
@@ -134,10 +135,9 @@ export function MapaRuta({
   popupMaxHeight = 220,
 }: Props) {
   const [pantallaCompleta, setPantallaCompleta] = useState(false)
-  const posicionesVisitas: [number, number][] = visitas.map((v) => [v.latitude, v.longitude])
-  const posicionesTiendas: [number, number][] = tiendasRegion.map((t) => [t.latitude, t.longitude])
-  const posicionesParqueo: [number, number][] = parkingSpots.map((p) => [p.latitude, p.longitude])
-  const todasLasPosiciones = [...posicionesVisitas, ...posicionesTiendas, ...posicionesParqueo]
+  // Fecha (YYYY-MM-DD local) del día elegido en la leyenda: el mapa muestra solo la ruta de ese
+  // día. null = toda la semana. Tocar el mismo día otra vez lo deselecciona.
+  const [diaSeleccionado, setDiaSeleccionado] = useState<string | null>(null)
 
   useEffect(() => {
     if (!pantallaCompleta) return
@@ -169,11 +169,28 @@ export function MapaRuta({
     visitasPorDia.get(fecha)!.push(visita)
   }
 
+  // Si el día elegido ya no existe (p.ej. cambió la semana mostrada), se vuelve a la semana completa.
+  const diaActivo = diaSeleccionado && visitasPorDia.has(diaSeleccionado) ? diaSeleccionado : null
+  const visitasVisibles = diaActivo ? visitasPorDia.get(diaActivo)! : visitas
+  const parqueosVisibles = diaActivo
+    ? parkingSpots.filter((p) => fechaLocalISO(p.started_at) === diaActivo)
+    : parkingSpots
+
+  // Con un día elegido se encuadra solo su ruta (sin las tiendas de la región, que harían que
+  // el zoom casi no cambie); con la semana completa, todo como antes.
+  const posicionesVisitas: [number, number][] = visitasVisibles.map((v) => [v.latitude, v.longitude])
+  const posicionesTiendas: [number, number][] = tiendasRegion.map((t) => [t.latitude, t.longitude])
+  const posicionesParqueo: [number, number][] = parqueosVisibles.map((p) => [p.latitude, p.longitude])
+  const todasLasPosiciones = diaActivo
+    ? [...posicionesVisitas, ...posicionesParqueo]
+    : [...posicionesVisitas, ...posicionesTiendas, ...posicionesParqueo]
+
   // La leyenda: un color por día. La ruta completa de la semana se numera de forma continua
   // (1..N) y se dibuja como una sola línea conectada, aunque el color de cada tramo cambie
   // según el día en el que cae el punto de llegada (para marcar dónde empieza un día nuevo
   // sin cortar la ruta).
   const gruposFinal: Grupo[] = fechasOrdenadas.map((fecha, i) => ({
+    fecha,
     color: colorDelDia(i),
     etiqueta: `Día ${i + 1} · ${new Date(`${fecha}T00:00:00`).toLocaleDateString('es-GT', {
       day: '2-digit',
@@ -182,7 +199,8 @@ export function MapaRuta({
     visitas: visitasPorDia.get(fecha)!,
   }))
 
-  const visitasOrdenadas = [...visitas].sort((a, b) => a.captured_at.localeCompare(b.captured_at))
+  // Con un día elegido, la numeración arranca en 1 para ese día (su propia ruta).
+  const visitasOrdenadas = [...visitasVisibles].sort((a, b) => a.captured_at.localeCompare(b.captured_at))
   const colorPorVisitaId = new Map<string, string>()
   const numeroPorVisitaId = new Map<string, number>()
   visitasOrdenadas.forEach((visita, idx) => {
@@ -262,7 +280,7 @@ export function MapaRuta({
               </Popup>
             </Marker>
           ))}
-          {visitas.map((visita) => {
+          {visitasVisibles.map((visita) => {
             const total = visita.sales.filter((v) => !v.cancelled).reduce((s, v) => s + Number(v.amount), 0)
             return (
               <Marker
@@ -290,7 +308,7 @@ export function MapaRuta({
               </Marker>
             )
           })}
-          {parkingSpots.map((parqueo) => (
+          {parqueosVisibles.map((parqueo) => (
             <Marker key={parqueo.id} position={[parqueo.latitude, parqueo.longitude]} icon={iconoParqueo}>
               <Popup maxHeight={popupMaxHeight}>
                 <div className="w-40">
@@ -314,16 +332,36 @@ export function MapaRuta({
         </MapContainer>
       </div>
       <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-500">
-        {gruposFinal.map((grupo) => (
-          <span key={grupo.etiqueta} className="flex items-center gap-1">
-            <span className="inline-block h-3 w-3 rounded-full" style={{ background: grupo.color }} />
-            {grupo.etiqueta}
-          </span>
-        ))}
+        {gruposFinal.map((grupo) => {
+          const seleccionado = diaActivo === grupo.fecha
+          return (
+            <button
+              key={grupo.fecha}
+              type="button"
+              onClick={() => setDiaSeleccionado(seleccionado ? null : grupo.fecha)}
+              aria-pressed={seleccionado}
+              title={seleccionado ? 'Ver toda la semana' : 'Ver solo la ruta de este día'}
+              className={`flex items-center gap-1 rounded-full px-2 py-0.5 transition ${
+                seleccionado
+                  ? 'bg-slate-900 font-semibold text-white'
+                  : diaActivo
+                    ? 'opacity-50 hover:bg-slate-100 hover:opacity-100'
+                    : 'hover:bg-slate-100'
+              }`}
+            >
+              <span className="inline-block h-3 w-3 rounded-full" style={{ background: grupo.color }} />
+              {grupo.etiqueta}
+              {seleccionado && <span className="ml-0.5">✕</span>}
+            </button>
+          )
+        })}
         {tiendasRegion.length > 0 && (
           <span className="flex items-center gap-1">
             <span className="inline-block h-3 w-3 rounded bg-[#0092D2]" /> Tienda de la región
           </span>
+        )}
+        {gruposFinal.length > 1 && !diaActivo && (
+          <span className="text-slate-400">Toca un día para ver solo su ruta</span>
         )}
       </p>
     </div>
