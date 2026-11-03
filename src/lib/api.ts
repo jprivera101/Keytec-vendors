@@ -934,46 +934,21 @@ export async function obtenerComparativoMensual(
     (filasPasado ?? []).map((f) => [f.salesman_id, f as FilaMetricaMensual]),
   )
 
-  // Mes actual (en curso): calculado en vivo, igual que antes de existir monthly_metrics.
-  const inicioMesActual = fechaLocalISO(new Date(anioActual, mesActual - 1, 1))
-  const inicioMesSiguiente = fechaLocalISO(new Date(anioActual, mesActual, 1))
-  const { data: semanasMesActual, error: semanasError } = await supabase
-    .from('weeks')
-    .select('id, salesman_id, start_date, start_mileage_km, end_mileage_km')
-    .in('salesman_id', vendedorIds)
-    .gte('start_date', inicioMesActual)
-    .lt('start_date', inicioMesSiguiente)
-  if (semanasError) throw semanasError
-
-  const semanasActual = (semanasMesActual ?? []) as FilaSemana[]
-  const metricasActual = await metricasPorSemana(semanasActual.map((s) => s.id))
-
-  function acumularMesActual(delVendedor: FilaSemana[]): MetricasPeriodo | null {
-    if (delVendedor.length === 0) return null
-    let km = 0
-    let huboSemanaFinalizada = false
-    let visitas = 0
-    let ventas = 0
-    for (const semana of delVendedor) {
-      if (semana.end_mileage_km != null) {
-        km += semana.end_mileage_km - semana.start_mileage_km
-        huboSemanaFinalizada = true
-      }
-      const m = metricasActual.get(semana.id)
-      visitas += m?.visitas ?? 0
-      ventas += m?.ventas ?? 0
-    }
-    return { kmRecorridos: huboSemanaFinalizada ? km : null, totalVisitas: visitas, totalVentas: ventas }
-  }
+  // Mes actual (en curso): calculado en vivo por fecha real de cada visita/venta, con el mismo
+  // criterio que recalcular_metricas_mensuales usa para el mes pasado.
+  const metricasActual = await metricasPorVendedorEnRango(
+    vendedorIds,
+    fechaLocalISO(new Date(anioActual, mesActual - 1, 1)),
+    fechaLocalISO(new Date(anioActual, mesActual, 0)),
+  )
 
   return vendedores
     .map((vendedor) => {
-      const semanasVendedor = semanasActual.filter((s) => s.salesman_id === vendedor.id)
       return {
         vendedorId: vendedor.id,
         nombre: vendedor.full_name,
         country: vendedor.country,
-        actual: acumularMesActual(semanasVendedor),
+        actual: metricasActual.get(vendedor.id) ?? null,
         anterior: filaAMetricas(anteriorPorVendedor.get(vendedor.id)),
       }
     })
@@ -997,25 +972,21 @@ export async function obtenerRangoFechasConDatos(
   return { minFecha: data?.[0]?.start_date ?? null, maxFecha: fechaLocalISO() }
 }
 
-/** Vendedores activos con sus métricas de un rango de fechas arbitrario [desde, hasta] (ambos
- * inclusive, "YYYY-MM-DD"), para la vista de "Personalizado" del Resumen. A diferencia de
- * obtenerComparativoMensual no hay "anterior" -- un rango elegido a mano no tiene un período
- * previo obvio con el que comparar -- así que ese campo siempre viene en null.
- *
+/** Métricas de cada vendedor en [desde, hasta] (ambos inclusive, "YYYY-MM-DD" locales).
  * Visitas y ventas se cuentan por el día en que OCURRIERON (captured_at / created_at), no por
- * la fecha en que empezó su semana: antes una semana que arrancó el 28/09 dejaba fuera del
- * rango "octubre" todas sus visitas de octubre (87 en oct-2026), y una que arrancó el 31/10
- * metía sus visitas de noviembre. El km sí sigue siendo por semana (solo se conoce el km al
- * abrir/cerrar la semana), contando las semanas finalizadas que empezaron dentro del rango. */
-export async function obtenerResumenPersonalizado(
-  pais: CountryCode | 'ALL',
-  region: string | 'ALL',
+ * la fecha en que empezó su semana: antes una semana iniciada el 28/09 dejaba fuera de
+ * "octubre" todas sus visitas de octubre (87 en oct-2026) y un día suelto a mitad de semana
+ * salía en 0. El km sí es por semana (solo se conoce al abrir/cerrar la semana): suma de las
+ * semanas finalizadas que empezaron dentro del rango. Mismo criterio que
+ * recalcular_metricas_mensuales (migración 0048), para que "mes actual" y "mes pasado" se
+ * comparen con la misma regla. Sin semana ni actividad en el rango, el vendedor no aparece. */
+async function metricasPorVendedorEnRango(
+  vendedorIds: string[],
   desde: string,
   hasta: string,
-): Promise<ComparativoVendedor[]> {
-  const vendedores = (await obtenerVendedores(pais, region)).filter((v) => v.active)
-  if (vendedores.length === 0) return []
-  const vendedorIds = vendedores.map((v) => v.id)
+): Promise<Map<string, MetricasPeriodo>> {
+  const resultado = new Map<string, MetricasPeriodo>()
+  if (vendedorIds.length === 0) return resultado
 
   const desdeFecha = fechaDesdeISO(desde)
   const hastaFecha = fechaDesdeISO(hasta)
@@ -1053,47 +1024,53 @@ export async function obtenerResumenPersonalizado(
     ),
   ])
   if (semanasRes.error) throw semanasRes.error
-  const semanas = (semanasRes.data ?? []) as FilaSemana[]
 
-  const porVendedor = new Map<string, { visitas: number; ventas: number }>()
   const fila = (id: string) => {
-    if (!porVendedor.has(id)) porVendedor.set(id, { visitas: 0, ventas: 0 })
-    return porVendedor.get(id)!
+    if (!resultado.has(id)) resultado.set(id, { kmRecorridos: null, totalVisitas: 0, totalVentas: 0 })
+    return resultado.get(id)!
+  }
+  for (const semana of (semanasRes.data ?? []) as FilaSemana[]) {
+    const f = fila(semana.salesman_id)
+    if (semana.end_mileage_km != null) {
+      f.kmRecorridos = (f.kmRecorridos ?? 0) + (semana.end_mileage_km - semana.start_mileage_km)
+    }
   }
   for (const v of visitas as unknown as { sales: { amount: number }[]; weeks: { salesman_id: string } }[]) {
     const f = fila(v.weeks.salesman_id)
-    f.visitas += 1
-    f.ventas += (v.sales ?? []).reduce((suma, venta) => suma + Number(venta.amount), 0)
+    f.totalVisitas += 1
+    f.totalVentas += (v.sales ?? []).reduce((suma, venta) => suma + Number(venta.amount), 0)
   }
   for (const e of envios as unknown as { amount: number; weeks: { salesman_id: string } }[]) {
-    fila(e.weeks.salesman_id).ventas += Number(e.amount)
+    fila(e.weeks.salesman_id).totalVentas += Number(e.amount)
   }
+  return resultado
+}
 
-  function acumular(vendedorId: string): MetricasPeriodo | null {
-    const delVendedor = semanas.filter((s) => s.salesman_id === vendedorId)
-    const actividad = porVendedor.get(vendedorId)
-    if (delVendedor.length === 0 && !actividad) return null
-    let km = 0
-    let huboSemanaFinalizada = false
-    for (const semana of delVendedor) {
-      if (semana.end_mileage_km != null) {
-        km += semana.end_mileage_km - semana.start_mileage_km
-        huboSemanaFinalizada = true
-      }
-    }
-    return {
-      kmRecorridos: huboSemanaFinalizada ? km : null,
-      totalVisitas: actividad?.visitas ?? 0,
-      totalVentas: actividad?.ventas ?? 0,
-    }
-  }
+/** Vendedores activos con sus métricas de un rango de fechas arbitrario [desde, hasta] (ambos
+ * inclusive, "YYYY-MM-DD"), para la vista de "Personalizado" del Resumen. A diferencia de
+ * obtenerComparativoMensual no hay "anterior" -- un rango elegido a mano no tiene un período
+ * previo obvio con el que comparar -- así que ese campo siempre viene en null. Ver
+ * metricasPorVendedorEnRango para cómo se cuenta. */
+export async function obtenerResumenPersonalizado(
+  pais: CountryCode | 'ALL',
+  region: string | 'ALL',
+  desde: string,
+  hasta: string,
+): Promise<ComparativoVendedor[]> {
+  const vendedores = (await obtenerVendedores(pais, region)).filter((v) => v.active)
+  if (vendedores.length === 0) return []
+  const metricas = await metricasPorVendedorEnRango(
+    vendedores.map((v) => v.id),
+    desde,
+    hasta,
+  )
 
   return vendedores
     .map((vendedor) => ({
       vendedorId: vendedor.id,
       nombre: vendedor.full_name,
       country: vendedor.country,
-      actual: acumular(vendedor.id),
+      actual: metricas.get(vendedor.id) ?? null,
       anterior: null,
     }))
     .sort((a, b) => a.nombre.localeCompare(b.nombre))
@@ -1129,8 +1106,9 @@ export async function obtenerTopLugaresEnRango(
       .from('ventas_lugares_mes')
       .select('amount, place_id, place_name, route_id, route_name, country')
       .eq('cancelled', false)
-      .gte('week_start_date', desde)
-      .lt('week_start_date', hastaExclusiva)
+      // Por fecha real de la visita (captured_at, migración 0048), no por inicio de semana.
+      .gte('captured_at', fechaDesdeISO(desde).toISOString())
+      .lt('captured_at', fechaDesdeISO(hastaExclusiva).toISOString())
     if (pais !== 'ALL') query = query.eq('country', pais)
     // sale_id (migración 0047) es la única columna única de la vista: orden estable para paginar.
     return query.order('sale_id', { ascending: true }).range(desdeFila, hastaFila)
